@@ -1,0 +1,8 @@
+pandas
+numpy
+openpyxl
+xlsxwriter
+matplotlib
+plotly
+python-docx
+python-pptx

@@ -1,0 +1,45 @@
+from pathlib import Path
+from constants import *
+
+# ===========================================
+# Campaign Information
+# ===========================================
+
+CLIENT_NAME = "Synchrony"
+
+PROGRAM_NAME = "Synchrony CCB2B - HIA incremental 8"
+
+CAMPAIGN_TYPE = LEADGEN
+
+# ===========================================
+# Report Configuration
+# ===========================================
+
+REPORT_MODE = QUARTERLY
+
+DATE_SPLITS = {
+    "Q1": ("2026-01-07", "2026-03-31"),
+    "Q2": ("2026-04-01", "2026-06-30")
+}
+
+# ==========================
+# Paths
+# ==========================
+
+BASE_DIR = Path(__file__).parent
+
+INPUT_DIR = BASE_DIR / "input"
+
+OUTPUT_DIR = BASE_DIR / "output"
+
+LOG_DIR = BASE_DIR / "logs"
+
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+LOG_DIR.mkdir(exist_ok=True)
+
+# ----------------------------------
+# DEVELOPMENT OPTIONS
+# ----------------------------------
+
+USE_CACHED_AI = True

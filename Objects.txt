@@ -1,0 +1,299 @@
+
+========== SLIDE 1 ==========
+TITLE_Report [SlidePlaceholder]
+   -> H1 2026 Quarterly Business Review
+SUBTITLE_Report [SlidePlaceholder]
+   -> Campaign Performance, Comparative Analysis & Value-Add Impact
+PERIOD_Report [SlidePlaceholder]
+   -> Q1 2026 – Q2 2026  |  10 Jan 2026 – 2 Jul 2026
+
+========== SLIDE 2 ==========
+Text Placeholder 1 [SlidePlaceholder]
+   -> 01   Executive Summary 02   Campaign Snapshot 03   Q1 2026 Performance 04   Q2 2026 Performance 05   Quarter-over-Quarte...
+Text Placeholder 2 [SlidePlaceholder]
+   -> AGENDA
+
+========== SLIDE 3 ==========
+TITLE_ExecutiveSummary [SlidePlaceholder]
+   -> H1 2026: broad-based growth in reach
+AI_ExecutiveSummary [SlidePlaceholder]
+   -> Executive Summary 1,621  Total Leads (H1) +0.75% QoQ  (799 → 805) 647  Unique Accounts (H1) +18.58% QoQ  (393 → 466) 4  ...
+
+========== SLIDE 4 ==========
+META_CampaignDescription [SlidePlaceholder]
+   -> 10 Jan 2026 – 2 Jul 2026  ·  Single-market healthcare payments campaign
+Rectangle 3 [Shape]
+   -> 
+Rectangle 4 [Shape]
+   -> 
+PERIOD_Q1 [Shape]
+   -> Q1 2026  ·  Jan 10 – Mar 31
+PERIOD_Q2 [Shape]
+   -> Q2 2026  ·  Apr 1 – Jul 2
+Rounded Rectangle 7 [Shape]
+   -> 
+Rounded Rectangle 11 [Shape]
+   -> 
+Rounded Rectangle 13 [Shape]
+   -> 
+AI_CampaignSnapshot [Shape]
+   -> A focused, single-market H1 program: four content assets sustained across both quarters, expanding from 10 to 12 total j...
+CARD_AssetsUsed [GroupShape]
+CARD_JobTitles [GroupShape]
+CARD_Country [GroupShape]
+CARD_WeeksInMarket [GroupShape]
+TITLE_CampaignSnapshot [SlidePlaceholder]
+   -> Campaign Snapshot
+
+========== SLIDE 5 ==========
+SECTION_Q1 [SlidePlaceholder]
+   -> Q1 2026 Performance
+
+========== SLIDE 6 ==========
+PERIOD_Q1 [SlidePlaceholder]
+   -> Jan 10 – Mar 31, 2026
+Group 42 [GroupShape]
+AI_Q1_Insight [Shape]
+   -> Q1 established a strong baseline – nearly 800 leads from 393 distinct healthcare accounts, with financing and payment-re...
+CARD_Q1_TotalLeads [GroupShape]
+CARD_Q1_Accounts [GroupShape]
+CARD_Q1_Assets [GroupShape]
+CARD_Q1_JobTitles [GroupShape]
+CARD_Q1_Country [GroupShape]
+TITLE_Q1Performance [SlidePlaceholder]
+   -> Q1 2026: Performance Review
+
+========== SLIDE 7 ==========
+SECTION_Q2 [SlidePlaceholder]
+   -> Q2 2026 Performance
+
+========== SLIDE 8 ==========
+PERIOD_Q2 [SlidePlaceholder]
+   -> Jan 10 – Mar 31, 2026
+Group 3 [GroupShape]
+AI_Q2_Insight [Shape]
+   -> Q2 built directly on Q1’s foundation – leads held steady while unique accounts jumped 18.6%, and job title breadth grew ...
+CARD_Q2_TotalLeads [GroupShape]
+CARD_Q2_Accounts [GroupShape]
+CARD_Q2_Assets [GroupShape]
+CARD_Q2_JobTitles [GroupShape]
+CARD_Q2_Country [GroupShape]
+TITLE_Q2Performance [SlidePlaceholder]
+   -> Q2 2026: Performance Review
+
+========== SLIDE 9 ==========
+SECTION_Comparison [SlidePlaceholder]
+   -> Q1 vs Q2 Performance
+
+========== SLIDE 10 ==========
+TITLE_Q1Q2Comparison [SlidePlaceholder]
+   -> Q1 vs Q2: Quarter-over-Quarter Comparison
+AI_ComparisonHeadline [SlidePlaceholder]
+   -> Leads held steady while account reach expanded sharply.
+Rounded Rectangle 4 [Shape]
+   -> 
+KPI_ComparisonMetric1 [Shape]
+   -> +0.75%
+Rounded Rectangle 6 [Shape]
+   -> 
+KPI_ComparisonMetric2 [Shape]
+   -> +18.58%
+AI_ComparisonSummary [Shape]
+   -> Reading this together: the campaign is not just repeating the same leads – it is converting a meaningfully wider set of ...
+CHART_Q1Q2Comparison [GraphicFrame]
+   -> CHART
+   -> TYPE: COLUMN_CLUSTERED (51)
+AI_ComparisonInsight1 [Shape]
+   -> Total Leads grew modestly – 799 to 805 – signaling a stable, mature funnel. 
+AI_ComparisonInsight2 [Shape]
+   -> Unique Accounts jumped from 393 to 466, the single biggest QoQ mover in the campaign.
+
+========== SLIDE 11 ==========
+Table_QoQMetrics [GraphicFrame]
+   -> TABLE
+StatusPill_TotalLeads [Shape]
+   -> Stable Growth
+StatusPill_UniqueAccounts [Shape]
+   -> Strong Growth
+StatusPill_AssetsUsed [Shape]
+   -> No Change
+StatusPill_JobTitles [Shape]
+   -> Stable Growth
+StatusPill_Countries [Shape]
+   -> No Change
+Rectangle 10 [Shape]
+   -> 
+CARD_StatusHeader [Shape]
+   -> Status
+AI_OptimizationHeading [Shape]
+   -> KEY OPTIMIZATION ACTIONS
+AI_OptimizationSummary [Shape]
+   -> –  Scale account-based targeting – Unique Accounts is the strongest mover; double down on the tactics driving it. –  Mai...
+TITLE_QoQMetrics [Shape]
+   -> Detailed QoQ Metrics & Optimization Status
+
+========== SLIDE 12 ==========
+SECTION_TrendAnalysis [SlidePlaceholder]
+   -> Trend Analysis
+
+========== SLIDE 13 ==========
+AI_TrendAnalysisHeading [SlidePlaceholder]
+   -> Projecting the H1 growth trajectory forward
+TrendInsight_Title [GroupShape]
+AI_TrendAnalysisChartNote [Shape]
+   -> *Q3/Q4 2026 figures are an illustrative, directional projection based on the observed H1 growth rate – not a guarantee o...
+Chart_TrendAnalysis [GraphicFrame]
+   -> CHART
+   -> TYPE: LINE_MARKERS (65)
+TITLE_TrendAnalysis [Shape]
+   -> Trend Analysis: Building H1 Momentum
+
+========== SLIDE 14 ==========
+SECTION_ContentPerformance [SlidePlaceholder]
+   -> Content & Asset Performance
+
+========== SLIDE 15 ==========
+AI_ContentPerformanceHeading [SlidePlaceholder]
+   -> All four assets performed within a tight, well-balanced band
+CARD_ContentPerformance [Shape]
+   -> 
+AI_ContentPerformanceSummary [Shape]
+   -> WHAT THE SPREAD TELLS US  Leads range just 32 leads (422 to 390) across all four assets - no single piece of content is ...
+Chart_ContentPerformance [GraphicFrame]
+   -> CHART
+   -> TYPE: BAR_CLUSTERED (57)
+TITLE_ContentPerformance [Shape]
+   -> Content & Asset Performance (H1 2026)
+
+========== SLIDE 16 ==========
+SECTION_AudienceInterest [SlidePlaceholder]
+   -> Audience Interest & Account Engagement
+
+========== SLIDE 17 ==========
+AI_AudienceInterestHeading [SlidePlaceholder]
+   -> "Medical billing" and "patient payments" dominate conversation
+AI_AudienceInterestSummary [Shape]
+   -> Financial and administrative themes account for ~85% of all mentions – confirming cost and billing complexity as the aud...
+Chart_TrendingTopics [GraphicFrame]
+   -> CHART
+   -> TYPE: BAR_CLUSTERED (57)
+Chart_TopicDistribution [GraphicFrame]
+   -> CHART
+   -> TYPE: DOUGHNUT (-4120)
+TITLE_AudienceInterest [Shape]
+   -> Audience Interest: Trending Topics & Categories
+
+========== SLIDE 18 ==========
+AI_EngagementHeading [SlidePlaceholder]
+   -> From intent-based targeting to active engagement
+CARD_EngagementFunnel [Shape]
+   -> 
+AI_EngagementSummary [Shape]
+   -> FUNNEL READ  All 1,719 targeted accounts showed trending intent signals – 100% qualification at the top of the funnel. 6...
+Chart_EngagementFunnel [GraphicFrame]
+   -> CHART
+   -> TYPE: BAR_CLUSTERED (57)
+TITLE_EngagementFunnel [Shape]
+   -> Audience Engagement Funnel
+
+========== SLIDE 19 ==========
+AI_TopAccountsSummary [SlidePlaceholder]
+   -> The organizations showing the strongest engagement and buying intent
+AI_TopAccountsHeading [Shape]
+   -> TOP ENGAGED ACCOUNTS (BY LEADS)
+Table_TopEngagedAccounts [GraphicFrame]
+   -> TABLE
+AI_TopIntentHeading [Shape]
+   -> TOP INTENT COMPANIES (BY ML SCORE)
+Table_TopIntentCompanies [GraphicFrame]
+   -> TABLE
+AI_TopAccountsFooter [Shape]
+   -> Twenty organizations scored 99–100 on ML intent – a concentrated, high-value expansion pool for H2 outreach.
+TITLE_TopAccounts [Shape]
+   -> Top Engaged Accounts & Intent Signals
+
+========== SLIDE 20 ==========
+SECTION_BuyingStage [SlidePlaceholder]
+   -> Predictive Buying Stage Distribution
+
+========== SLIDE 21 ==========
+AI_BuyingStageSummary [SlidePlaceholder]
+   -> Where the 1,719 signal-showing accounts sit in the buying journey
+CARD_BuyingStage1 [Shape]
+   -> 
+KPI_BuyingStage2 [Shape]
+   -> 460
+CARD_BuyingStage2 [Shape]
+   -> 
+KPI_BuyingStage1 [Shape]
+   -> 703
+Chart_BuyingStage [GraphicFrame]
+   -> CHART
+   -> TYPE: COLUMN_CLUSTERED (51)
+AI_BuyingStageHeading1 [Shape]
+   -> Accounts in Consideration + Decision – sales-ready pipeline
+AI_BuyingStageHeading2 [Shape]
+   -> Accounts with No Active Signals – untapped nurture pool
+TITLE_BuyingStage [Shape]
+   -> Predictive Buying Stage Distribution
+
+========== SLIDE 22 ==========
+SECTION_OptimizationHighlights [SlidePlaceholder]
+   -> Highlights, Key Learnings & Summary
+
+========== SLIDE 23 ==========
+AI_OptimizationHighlightsSummary [SlidePlaceholder]
+   -> Turning H1 signals into H2 action
+Table_OptimizationHighlights [GraphicFrame]
+   -> TABLE
+AI_OptimizationFooter [Shape]
+   -> Bottom line: the campaign’s biggest lever for H2 is account expansion – the data shows this is where the current strateg...
+Group 17 [GroupShape]
+TITLE_OptimizationHighlights [Shape]
+   -> Optimization Highlights & Recommendations
+
+========== SLIDE 24 ==========
+TITLE_KeyLearnings [SlidePlaceholder]
+   -> Key Learnings
+AI_KeyLearnings [Shape]
+   -> 1.  Reach is outpacing volume. Unique accounts grew 18.6% QoQ while leads grew 0.75% – the campaign is widening its foot...
+
+========== SLIDE 25 ==========
+TITLE_H2Momentum [SlidePlaceholder]
+   -> Building on H1 momentum into H2 2026 and beyond
+AI_H2Recommendations [SlidePlaceholder]
+   -> Momentum & 2026 Outlook 01   Convert the 703 "No Active Signals" accounts into engaged pipeline through expanded account...
+
+========== SLIDE 26 ==========
+AI_ValueAddHeading [Shape]
+   -> Beyond core content-syndication leads, Madison Logic’s intent layer identified and qualified an expanded pool of buying-...
+CARD_ValueMetric1 [Shape]
+   -> 
+KPI_ValueMetric1 [Shape]
+   -> 1,719 Accounts identified via intent & trending signals
+CARD_ValueMetric2 [Shape]
+   -> 
+KPI_ValueMetric2 [Shape]
+   -> 628 Accounts actively engaged (36.5% reach-to-engage)
+CARD_ValueMetric3 [Shape]
+   -> 
+KPI_ValueMetric3 [Shape]
+   -> 460 Accounts in Consideration + Decision – sales-ready
+CARD_ValueMetric4 [Shape]
+   -> 
+KPI_ValueMetric4 [Shape]
+   -> 1.29 Avg. leads generated per account, across assets
+CARD_PartnershipSummary [Shape]
+   -> 
+AI_PartnershipSummary [Shape]
+   -> WHAT THIS MEANS FOR THE PARTNERSHIP  This intent-driven layer runs alongside core lead delivery – surfacing 1,719 accoun...
+TextBox 15 [Shape]
+   -> 
+TITLE_ValueAddSummary [Shape]
+   -> Value-Add Lead Impact Summary
+
+========== SLIDE 27 ==========
+TITLE_ThankYou [Shape]
+   -> Thank You
+AI_ClosingMessage [Shape]
+   -> Questions? Let’s discuss how we build on H1 momentum together.

@@ -1,0 +1,29 @@
+{
+    "Slide 1": {
+        "Title": "Cover"
+    },
+    "Slide 2": {
+        "Chart": "01_Executive_KPI.png",
+        "Section": "Executive Summary"
+    },
+    "Slide 3": {
+        "Chart": "02_QoQ_Comparison.png",
+        "Section": "Q1 vs Q2"
+    },
+    "Slide 4": {
+        "Chart": "03_Asset_Performance.png",
+        "Section": "Asset Performance"
+    },
+    "Slide 5": {
+        "Chart": "04_Asset_Contribution.png",
+        "Section": "Asset Contribution"
+    },
+    "Slide 6": {
+        "Chart": "05_Buying_Stage.png",
+        "Section": "Buying Stage"
+    },
+    "Slide 7": {
+        "Chart": "06_Top_Accounts.png",
+        "Section": "Top Accounts"
+    }
+}
