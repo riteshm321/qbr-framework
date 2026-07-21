@@ -3,6 +3,11 @@ from constants import *
 
 # ===========================================
 # Campaign Information
+#
+# CLIENT_NAME / PROGRAM_NAME are fallback defaults only.
+# main.py overwrites them at runtime with the "Client:" /
+# "Program:" metadata read from the input reports, so a new
+# client's reports work without editing this file.
 # ===========================================
 
 CLIENT_NAME = "Synchrony"

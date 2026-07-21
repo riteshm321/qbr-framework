@@ -4,6 +4,7 @@ from constants import (
     TRENDING_TOPICS,
     TRENDING_ACCOUNTS,
     ASSET_DELIVERY,
+    TARGET_ACCOUNT_HISTORY,
     UNKNOWN
 )
 
@@ -76,6 +77,18 @@ def detect_dataset(df):
     }.issubset(columns):
 
         return ASSET_DELIVERY
+
+    # -----------------------------------------
+    # Target Account List History
+    # -----------------------------------------
+
+    elif {
+        "Accounts Targeted",
+        "New Accounts",
+        "Removed Accounts"
+    }.issubset(columns):
+
+        return TARGET_ACCOUNT_HISTORY
 
     # -----------------------------------------
 

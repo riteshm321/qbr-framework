@@ -21,6 +21,8 @@ TRENDING_ACCOUNTS = "TrendingAccounts"
 
 ASSET_DELIVERY = "AssetDelivery"
 
+TARGET_ACCOUNT_HISTORY = "TargetAccountHistory"
+
 UNKNOWN = "Unknown"
 
 # ======================================================

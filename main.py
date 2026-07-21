@@ -1,5 +1,11 @@
+import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 from engine.campaign_manager import CampaignManager
 
+import config
 from config import *
 
 from core.loader import *
@@ -45,6 +51,23 @@ for file in INPUT_DIR.iterdir():
     print(f"{file.name}  --->  {dataset_name}")
 
     datasets[dataset_name] = df
+
+# -------------------------------------------------------------
+# Derive Client / Program from the reports themselves so the
+# framework never relies on a hardcoded per-client config value.
+# Falls back to whatever is already set in config.py if a report
+# doesn't carry that metadata.
+# -------------------------------------------------------------
+
+for df in datasets.values():
+
+    report_metadata = df.attrs.get("metadata", {})
+
+    if report_metadata.get("Client"):
+        config.CLIENT_NAME = report_metadata["Client"]
+
+    if report_metadata.get("Program"):
+        config.PROGRAM_NAME = report_metadata["Program"]
 
 print("\n")
 
