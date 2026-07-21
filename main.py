@@ -69,6 +69,19 @@ for df in datasets.values():
     if report_metadata.get("Program"):
         config.PROGRAM_NAME = report_metadata["Program"]
 
+# -------------------------------------------------------------
+# Ask the user which period(s) to analyze, then resolve that
+# choice into concrete date ranges using the data that was
+# actually loaded -- no reporting period is ever hardcoded.
+# -------------------------------------------------------------
+
+from core.period_resolver import resolve as resolve_period
+
+manager = CampaignManager()
+manager.select_analysis()
+
+resolve_period(manager.analysis_type, datasets)
+
 print("\n")
 
 for name, df in datasets.items():

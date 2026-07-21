@@ -13,7 +13,7 @@ Version : 0.3
 
 import pandas as pd
 
-from config import REPORT_MODE, DATE_SPLITS
+import config
 from constants import CAMPAIGN, MONTHLY, QUARTERLY, CUSTOM
 
 
@@ -95,7 +95,7 @@ class DateEngine:
 
         # Campaign Mode
 
-        if REPORT_MODE == CAMPAIGN:
+        if config.REPORT_MODE == CAMPAIGN:
 
             return {
 
@@ -105,11 +105,11 @@ class DateEngine:
 
         # Quarterly / Custom
 
-        if REPORT_MODE in [QUARTERLY, CUSTOM]:
+        if config.REPORT_MODE in [QUARTERLY, CUSTOM]:
 
             periods = {}
 
-            for name, (start, end) in DATE_SPLITS.items():
+            for name, (start, end) in config.DATE_SPLITS.items():
 
                 mask = (
 
@@ -127,7 +127,7 @@ class DateEngine:
 
         # Monthly
 
-        if REPORT_MODE == MONTHLY:
+        if config.REPORT_MODE == MONTHLY:
 
             periods = {}
 
@@ -149,6 +149,6 @@ class DateEngine:
 
         raise ValueError(
 
-            f"Unknown REPORT_MODE : {REPORT_MODE}"
+            f"Unknown REPORT_MODE : {config.REPORT_MODE}"
 
         )

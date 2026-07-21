@@ -3,55 +3,55 @@
         "Client": "Deltek",
         "Program": "Q2 All Combined (ID: 136996)",
         "Campaign Type": "LeadGen",
-        "Report Mode": "Quarterly",
-        "Generated On": "21-Jul-2026 21:04"
+        "Report Mode": "Campaign",
+        "Generated On": "21-Jul-2026 23:23"
     },
     "Executive Summary": [
         {
             "KPI": "Total Leads",
             "Overall": 287,
-            "Change": 287.0,
-            "% Change": null,
-            "Q1": 0.0,
+            "Change": 0.0,
+            "% Change": 0.0,
+            "Q1": 287.0,
             "Q2": 287.0
         },
         {
             "KPI": "Unique Accounts",
             "Overall": 204,
-            "Change": 204.0,
-            "% Change": null,
-            "Q1": 0.0,
+            "Change": 0.0,
+            "% Change": 0.0,
+            "Q1": 204.0,
             "Q2": 204.0
         },
         {
             "KPI": "Assets Used",
             "Overall": 10,
-            "Change": 10.0,
-            "% Change": null,
-            "Q1": 0.0,
+            "Change": 0.0,
+            "% Change": 0.0,
+            "Q1": 10.0,
             "Q2": 10.0
         },
         {
             "KPI": "Job Titles",
             "Overall": 20,
-            "Change": 20.0,
-            "% Change": null,
-            "Q1": 0.0,
+            "Change": 0.0,
+            "% Change": 0.0,
+            "Q1": 20.0,
             "Q2": 20.0
         },
         {
             "KPI": "Countries",
             "Overall": 6,
-            "Change": 6.0,
-            "% Change": null,
-            "Q1": 0.0,
+            "Change": 0.0,
+            "% Change": 0.0,
+            "Q1": 6.0,
             "Q2": 6.0
         },
         {
             "KPI": "Trending Topics",
             "Overall": 37,
             "Change": NaN,
-            "% Change": null,
+            "% Change": NaN,
             "Q1": NaN,
             "Q2": NaN
         }
@@ -72,50 +72,50 @@
         {
             "Metric": "Assets Used",
             "Overall": 10,
-            "Q1": 0,
+            "Q1": 10,
             "Q2": 10
         },
         {
             "Metric": "Job Titles",
             "Overall": 20,
-            "Q1": 0,
+            "Q1": 20,
             "Q2": 20
         },
         {
             "Metric": "Countries",
             "Overall": 6,
-            "Q1": 0,
+            "Q1": 6,
             "Q2": 6
         }
     ],
     "Q1 Summary": [
         {
             "Metric": "Total Leads",
-            "Value": 0
+            "Value": 287
         },
         {
             "Metric": "Unique Accounts",
-            "Value": 0
+            "Value": 204
         },
         {
             "Metric": "Assets Used",
-            "Value": 0
+            "Value": 10
         },
         {
             "Metric": "Job Titles",
-            "Value": 0
+            "Value": 20
         },
         {
             "Metric": "Countries",
-            "Value": 0
+            "Value": 6
         },
         {
             "Metric": "Top Asset",
-            "Value": ""
+            "Value": "The KPI Framework That's Transforming Consulting Firms"
         },
         {
             "Metric": "Top Topic",
-            "Value": ""
+            "Value": "enterprise cloud"
         }
     ],
     "Q2 Summary": [
@@ -651,44 +651,44 @@
     "QoQ Comparison": [
         {
             "Metric": "Total Leads",
-            "Q1": 0,
+            "Q1": 287,
             "Q2": 287,
-            "Change": 287,
+            "Change": 0,
             "% Change": 0
         },
         {
             "Metric": "Unique Accounts",
-            "Q1": 0,
+            "Q1": 204,
             "Q2": 204,
-            "Change": 204,
+            "Change": 0,
             "% Change": 0
         },
         {
             "Metric": "Assets Used",
-            "Q1": 0,
+            "Q1": 10,
             "Q2": 10,
-            "Change": 10,
+            "Change": 0,
             "% Change": 0
         },
         {
             "Metric": "Job Titles",
-            "Q1": 0,
+            "Q1": 20,
             "Q2": 20,
-            "Change": 20,
+            "Change": 0,
             "% Change": 0
         },
         {
             "Metric": "Countries",
-            "Q1": 0,
+            "Q1": 6,
             "Q2": 6,
-            "Change": 6,
+            "Change": 0,
             "% Change": 0
         }
     ],
     "Optimization Insights": [
         {
             "Metric": "Total Leads",
-            "Q1": 0,
+            "Q1": 287,
             "Q2": 287,
             "% Change": 0,
             "Status": "No Change",
@@ -696,7 +696,7 @@
         },
         {
             "Metric": "Unique Accounts",
-            "Q1": 0,
+            "Q1": 204,
             "Q2": 204,
             "% Change": 0,
             "Status": "No Change",
@@ -704,7 +704,7 @@
         },
         {
             "Metric": "Assets Used",
-            "Q1": 0,
+            "Q1": 10,
             "Q2": 10,
             "% Change": 0,
             "Status": "No Change",
@@ -712,7 +712,7 @@
         },
         {
             "Metric": "Job Titles",
-            "Q1": 0,
+            "Q1": 20,
             "Q2": 20,
             "% Change": 0,
             "Status": "No Change",
@@ -720,7 +720,7 @@
         },
         {
             "Metric": "Countries",
-            "Q1": 0,
+            "Q1": 6,
             "Q2": 6,
             "% Change": 0,
             "Status": "No Change",

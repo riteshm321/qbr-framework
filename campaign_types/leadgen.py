@@ -46,6 +46,39 @@ class LeadGenAnalyzer:
 
     # ------------------------------------------------
 
+    def _period_columns(self):
+
+        """
+        Returns ("Q1", df_a, "Q2", df_b) for the two periods that drive
+        every before/after comparison table (Executive/QoQ/Snapshot).
+        The "Q1"/"Q2" labels are fixed on purpose -- every PPT object
+        and AI export field downstream is wired to those exact column
+        names -- only which DataFrame sits in each slot changes with
+        the selected analysis mode:
+
+        - Quarter over Quarter / Custom Date Range: the two periods the
+          user picked, chronologically.
+        - Full Campaign (1 period): the same period in both slots, so
+          comparisons degrade to zero-change rather than crashing.
+        - Month over Month (3+ periods): earliest vs most recent month,
+          a representative before/after snapshot. A true month-by-month
+          trend is a separate table (see monthly_leads()) and is a
+          slide-design decision for a later pass, not a data gap.
+        """
+
+        names = list(self.periods.keys())
+
+        if len(names) == 1:
+            df = self.periods[names[0]]
+            return "Q1", df, "Q2", df
+
+        return (
+            "Q1", self.periods[names[0]],
+            "Q2", self.periods[names[-1]]
+        )
+
+    # ------------------------------------------------
+
     def total_leads(self):
 
         leads = self.leads
@@ -165,6 +198,16 @@ class LeadGenAnalyzer:
 
         executive = self.results["executive"]
 
+        name_a, a, name_b, b = self._period_columns()
+
+        kpi_columns = {
+            "Total Leads": lambda df: KPICalculator.row_count(df),
+            "Unique Accounts": lambda df: KPICalculator.unique(df, "Account Name"),
+            "Assets Used": lambda df: KPICalculator.unique(df, "Asset Name"),
+            "Job Titles": lambda df: KPICalculator.unique(df, "Job Title"),
+            "Countries": lambda df: KPICalculator.unique(df, "Country"),
+        }
+
         rows = []
 
         for kpi, overall_value in executive.items():
@@ -176,61 +219,15 @@ class LeadGenAnalyzer:
                 "% Change": None
             }
 
-            # -----------------------------------
-            # Calculate period values
-            # -----------------------------------
+            column_fn = kpi_columns.get(kpi)
 
-            if kpi == "Total Leads":
+            if column_fn:
 
-                for period_name, period_df in self.periods.items():
+                row[name_a] = column_fn(a)
+                row[name_b] = column_fn(b)
 
-                    row[period_name] = KPICalculator.row_count(period_df)
-
-            elif kpi == "Unique Accounts":
-
-                for period_name, period_df in self.periods.items():
-
-                    row[period_name] = KPICalculator.unique(
-                                            period_df,
-                                            "Account Name"
-                                        )
-            
-            elif kpi == "Assets Used":
-
-                for period_name, period_df in self.periods.items():
-
-                    row[period_name] = KPICalculator.unique(
-                                                period_df,
-                                                "Asset Name"
-                                            )
-                    
-            elif kpi == "Job Titles":
-
-                for period_name, period_df in self.periods.items():
-
-                    row[period_name] = KPICalculator.unique(
-                                                period_df,
-                                                "Job Title"
-                                            )
-                    
-            elif kpi == "Countries":
-
-                for period_name, period_df in self.periods.items():
-
-                    row[period_name] = KPICalculator.unique(
-                                                period_df,
-                                                "Country"
-                                            )
-                    
-            if "Q1" in row and "Q2" in row:
-
-                row["Change"] = row["Q2"] - row["Q1"]
-
-                if row["Q1"] != 0:
-                    row["% Change"] = round(
-                        (row["Change"] / row["Q1"]) * 100,
-                        2
-                    )
+                row["Change"] = KPICalculator.change(row[name_a], row[name_b])
+                row["% Change"] = KPICalculator.pct_change(row[name_a], row[name_b])
 
             rows.append(row)
 
@@ -304,7 +301,9 @@ class LeadGenAnalyzer:
     
     def build_period_tables(self):
 
-        for period_name, df in self.periods.items():
+        name_a, a, name_b, b = self._period_columns()
+
+        for period_name, df in [(name_a, a), (name_b, b)]:
 
             rows = []
 
@@ -479,55 +478,47 @@ class LeadGenAnalyzer:
 
     def build_qoq_comparison(self):
 
-        q1 = self.periods["Q1"]
-        q2 = self.periods["Q2"]
+        name_a, a, name_b, b = self._period_columns()
 
         comparison = []
 
         metrics = [
 
             ("Total Leads",
-            len(q1),
-            len(q2)),
+            len(a),
+            len(b)),
 
             ("Unique Accounts",
-            q1["Account Name"].nunique(),
-            q2["Account Name"].nunique()),
+            a["Account Name"].nunique(),
+            b["Account Name"].nunique()),
 
             ("Assets Used",
-            q1["Asset Name"].nunique(),
-            q2["Asset Name"].nunique()),
+            a["Asset Name"].nunique(),
+            b["Asset Name"].nunique()),
 
             ("Job Titles",
-            q1["Job Title"].nunique(),
-            q2["Job Title"].nunique()),
+            a["Job Title"].nunique(),
+            b["Job Title"].nunique()),
 
             ("Countries",
-            q1["Country"].nunique(),
-            q2["Country"].nunique())
+            a["Country"].nunique(),
+            b["Country"].nunique())
 
         ]
 
-        for metric, q1_value, q2_value in metrics:
-
-            change = q2_value - q1_value
-
-            pct = 0
-
-            if q1_value != 0:
-                pct = round((change / q1_value) * 100, 2)
+        for metric, a_value, b_value in metrics:
 
             comparison.append({
 
                 "Metric": metric,
 
-                "Q1": q1_value,
+                name_a: a_value,
 
-                "Q2": q2_value,
+                name_b: b_value,
 
-                "Change": change,
+                "Change": KPICalculator.change(a_value, b_value),
 
-                "% Change": pct
+                "% Change": KPICalculator.pct_change(a_value, b_value) or 0
 
             })
 
@@ -536,6 +527,11 @@ class LeadGenAnalyzer:
     def build_optimization_insights(self):
 
         comparison = self.tables["QoQ Comparison"]
+
+        period_columns = [
+            col for col in comparison.columns
+            if col not in ("Metric", "Change", "% Change")
+        ]
 
         insights = []
 
@@ -569,21 +565,18 @@ class LeadGenAnalyzer:
 
                 recommendation = "Investigate and optimize."
 
-            insights.append({
+            insight = {"Metric": metric}
 
-                "Metric": metric,
+            for col in period_columns:
+                insight[col] = row[col]
 
-                "Q1": row["Q1"],
-
-                "Q2": row["Q2"],
-
+            insight.update({
                 "% Change": pct,
-
                 "Status": status,
-
                 "Recommendation": recommendation
-
             })
+
+            insights.append(insight)
 
         self.tables["Optimization Insights"] = pd.DataFrame(insights)
 
@@ -862,42 +855,41 @@ class LeadGenAnalyzer:
 
         leads = self.leads
 
-        q1 = self.periods["Q1"]
-        q2 = self.periods["Q2"]
+        name_a, a, name_b, b = self._period_columns()
 
         rows.append({
             "Metric": "Campaign Start",
             "Overall": leads["Date"].min().strftime("%d-%b-%Y"),
-            "Q1": "",
-            "Q2": ""
+            name_a: "",
+            name_b: ""
         })
 
         rows.append({
             "Metric": "Campaign End",
             "Overall": leads["Date"].max().strftime("%d-%b-%Y"),
-            "Q1": "",
-            "Q2": ""
+            name_a: "",
+            name_b: ""
         })
 
         rows.append({
             "Metric": "Assets Used",
             "Overall": leads["Asset Name"].nunique(),
-            "Q1": q1["Asset Name"].nunique(),
-            "Q2": q2["Asset Name"].nunique()
+            name_a: a["Asset Name"].nunique(),
+            name_b: b["Asset Name"].nunique()
         })
 
         rows.append({
             "Metric": "Job Titles",
             "Overall": leads["Job Title"].nunique(),
-            "Q1": q1["Job Title"].nunique(),
-            "Q2": q2["Job Title"].nunique()
+            name_a: a["Job Title"].nunique(),
+            name_b: b["Job Title"].nunique()
         })
 
         rows.append({
             "Metric": "Countries",
             "Overall": leads["Country"].nunique(),
-            "Q1": q1["Country"].nunique(),
-            "Q2": q2["Country"].nunique()
+            name_a: a["Country"].nunique(),
+            name_b: b["Country"].nunique()
         })
 
         self.tables["Campaign Snapshot"] = pd.DataFrame(rows)

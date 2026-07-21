@@ -59,3 +59,18 @@ class KPICalculator:
             .value_counts()
             .idxmax()
         )
+
+    @staticmethod
+    def change(before, after):
+        """Absolute change between two period values."""
+
+        return after - before
+
+    @staticmethod
+    def pct_change(before, after):
+        """Percent change between two period values, or None if before is 0."""
+
+        if not before:
+            return None
+
+        return round((after - before) / before * 100, 2)
