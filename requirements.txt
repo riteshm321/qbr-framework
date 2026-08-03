@@ -6,3 +6,5 @@ matplotlib
 plotly
 python-docx
 python-pptx
+google-generativeai
+python-dotenv
