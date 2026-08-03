@@ -16,6 +16,12 @@ class StoryBuilder:
 
     def build(self):
 
+        # AI generation is paused: USE_CACHED_AI means always reuse
+        # output/ai_response.json as-is, with no automatic freshness
+        # check against the current client/data -- calling Gemini
+        # happens only when that cache file doesn't exist at all (e.g.
+        # you've deleted it yourself because you specifically want new
+        # AI content generated for what's currently loaded).
         if USE_CACHED_AI:
 
             cache = Path("output") / "ai_response.json"
@@ -74,17 +80,17 @@ class StoryBuilder:
 
         self.presentation.ai["comparison"] = ai_json.get(
             "Comparison",
-            ""
+            {}
         )
 
         self.presentation.ai["recommendations"] = ai_json.get(
             "Recommendations",
-            ""
+            {}
         )
 
         self.presentation.ai["optimization"] = ai_json.get(
             "Optimization",
-            ""
+            {}
         )
 
         value_add = ai_json.get("ValueAdd", {})

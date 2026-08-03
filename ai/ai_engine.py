@@ -26,7 +26,19 @@ class AIEngine:
 
         prompt = self.builder.build()
 
-        response = self.client.ask(prompt)
+        try:
+
+            response = self.client.ask(prompt)
+
+        except Exception as e:
+
+            # A transient AI-service failure (rate limit, network,
+            # auth) shouldn't take down the whole deck generation --
+            # everything except the AI narrative text is independent of
+            # this call. Leave those sections blank (same fallback as
+            # an unparseable response below) rather than crashing.
+            print(f"\nAI request failed: {e}\n")
+            return None
 
         try:
 

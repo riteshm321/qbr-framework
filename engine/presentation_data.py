@@ -4,7 +4,9 @@ Universal Presentation Data Model
 Every module writes here.
 Only ppt_engine.py reads from here.
 """
+import math
 import textwrap
+import pandas as pd
 
 class PresentationData:
 
@@ -34,11 +36,16 @@ class PresentationData:
 
             "q2_analysis": "",
 
-            "comparison": "",
+            # These three are read back as dicts (.get("summary"),
+            # .get("bullets"/"actions")) in to_ppt_dictionary() -- {}
+            # rather than "" so that default still supports .get() when
+            # the AI call never ran (e.g. a Gemini failure/rate limit),
+            # instead of crashing on a plain string with no .get().
+            "comparison": {},
 
-            "recommendations": "",
+            "recommendations": {},
 
-            "optimization": "",
+            "optimization": {},
 
             "value_add": "",
 
@@ -86,6 +93,39 @@ class PresentationData:
                 textwrap.wrap(str(x), width=width)
             )
         )
+
+    @staticmethod
+    def format_count(value):
+        """Thousands-separated display text for a KPI card count (e.g.
+        1403 -> "1,403"). Only touches the text shown on the slide --
+        callers needing the raw number for further math should keep
+        reading it from self.tables/period_meta directly."""
+
+        try:
+            return f"{value:,}"
+        except (TypeError, ValueError):
+            return value
+
+    @staticmethod
+    def format_percent(value):
+        """Display text for a % Change figure (e.g. 12.5 -> "12.5%"),
+        so it reads as a percentage instead of a bare number that looks
+        like a plain count next to it."""
+
+        if value is None or (isinstance(value, float) and math.isnan(value)):
+            return ""
+
+        try:
+            return f"{value:g}%"
+        except (TypeError, ValueError):
+            return value
+
+    @staticmethod
+    def pluralize_country(count):
+        """"Country" for exactly 1, "Countries" for 0 or any other
+        count -- the card's label text, not the number itself."""
+
+        return "Country" if count == 1 else "Countries"
 
     def to_ppt_dictionary(self):
 
@@ -144,14 +184,111 @@ class PresentationData:
             ""
         )
 
-        # Campaign description
+        # -------------------------------------------------
+        # SELECTED PERIOD(S)
+        #
+        # Set once by the analyzer (see LeadGenAnalyzer._build_period_meta)
+        # from whatever analysis period was picked when running the tool.
+        # -------------------------------------------------
 
-        description = self.metadata.get(
+        periods = self.campaign.get("periods", {})
+
+        comparison_slots = periods.get("comparison_slots", [])
+
+        ppt["META_CampaignDescription"] = periods.get(
             "campaign_description",
             ""
         )
 
-#        ppt["META_CampaignDescription"] = description
+        # Campaign Snapshot (slide 4) always describes the whole
+        # campaign, independent of whatever period(s) are being
+        # compared elsewhere in the deck -- always one merged box
+        # showing the overall date range, never split into two.
+        ppt["PERIOD_Q1"] = periods.get("overall_range", "")
+        ppt["PERIOD_Q2"] = periods.get("overall_range", "")
+
+        ppt["SECTION_Q1"] = periods.get("section_title", "")
+
+        # Agenda: fixed items around the period-specific performance
+        # section(s), which vary in number and wording with the mode.
+
+        ppt["Text Placeholder 1"] = (
+            ["Executive Summary", "Campaign Snapshot"]
+            + periods.get("agenda_items", ["Campaign Performance"])
+            + [
+                periods.get("comparison_label", "Comparative Analysis"),
+                "Content, Audience & Intent Insights",
+                "Key Learnings & Optimization Highlights",
+                "Momentum & 2026 Outlook",
+                "Value-Add Lead Impact Summary",
+            ]
+        )
+
+        # -------------------------------------------------
+        # PER-PERIOD DETAIL SLIDES (divider + performance detail,
+        # one pair per slot in LeadGenAnalyzer.period_meta["slots"]).
+        #
+        # The first two slots reuse the template's existing Q1/Q2
+        # objects; slide_ops.py clones and renames a Q1/Q2-shaped pair
+        # for every slot beyond that (P3, P4, ...), so this loop maps
+        # onto whichever slides actually exist for the selected mode.
+        # -------------------------------------------------
+
+        for slot in periods.get("slots", []):
+
+            token = slot["slot"]
+            metrics = slot["metrics"]
+            date_range = f"{slot['start']} - {slot['end']}"
+
+            ppt[f"TITLE_{token}Performance"] = f"{slot['label']} Performance"
+
+            ppt[f"SECTION_{token}"] = f"{slot['label']} Performance"
+
+            # PERIOD_Q1/PERIOD_Q2 are ambiguous names shared with slide 4
+            # (already set above, occurrence 0) -- the detail-slide copy
+            # is occurrence 1. P3+ names are unique, occurrence 0.
+            period_key = f"PERIOD_{token}" if token not in ("Q1", "Q2") else f"PERIOD_{token}_Detail"
+
+            ppt[period_key] = {
+                "object": f"PERIOD_{token}",
+                "occurrence": 1 if token in ("Q1", "Q2") else 0,
+                "text": date_range,
+            }
+
+            ppt[f"CARD_{token}_TotalLeads"] = self.format_count(metrics["Total Leads"])
+            ppt[f"CARD_{token}_Accounts"] = self.format_count(metrics["Unique Accounts"])
+            ppt[f"CARD_{token}_Assets"] = self.format_count(metrics["Assets Used"])
+            ppt[f"CARD_{token}_JobTitles"] = self.format_count(metrics["Job Titles"])
+            ppt[f"CARD_{token}_Country"] = self.format_count(metrics["Countries"])
+
+            ppt[f"CARD_{token}_CountryLabel"] = {
+                "object": f"CARD_{token}_Country",
+                "group_child_index": 2,
+                "text": self.pluralize_country(metrics["Countries"]),
+            }
+
+            ppt[f"AI_{token}_TopAsset"] = {
+                "paragraph_index": 2,
+                "text": metrics["Top Asset"],
+            }
+
+            ppt[f"AI_{token}_TrendingTopic"] = {
+                "paragraph_index": 2,
+                "text": metrics["Top Topic"],
+            }
+
+        # The comparison section (divider + chart/table slide) always
+        # exists, however many detail slides precede it, and its wording
+        # adapts to the mode via the same comparison_label used in the
+        # agenda above.
+
+        ppt["SECTION_Comparison"] = periods.get("comparison_label", "Comparative Analysis")
+
+        ppt["TITLE_Q1Q2Comparison"] = periods.get("comparison_label", "Comparative Analysis")
+
+        ppt["TITLE_QoQMetrics"] = periods.get(
+            "detail_metrics_title", "Detailed QoQ Metrics & Optimization Status"
+        )
 
         # -------------------------------------------------
         # CAMPAIGN SNAPSHOT
@@ -272,51 +409,43 @@ class PresentationData:
             ""
         )
 
+        value_add_metrics = self.tables.get("Value Add Metrics")
+
+        if value_add_metrics is not None:
+
+            for i, row in value_add_metrics.iterrows():
+
+                object_name = f"KPI_ValueMetric{i + 1}"
+
+                ppt[f"{object_name}_Value"] = {
+                    "object": object_name,
+                    "paragraph_index": 0,
+                    "text": row["Value"],
+                }
+
+                ppt[f"{object_name}_Caption"] = {
+                    "object": object_name,
+                    "paragraph_index": 1,
+                    "text": row["Caption"],
+                }
+
         # -------------------------------------------------
-        # KPI CARDS
+        # KPI CARDS (Overall only -- per-slot Q1/Q2/P3... cards are
+        # set above, straight from LeadGenAnalyzer.period_meta)
         # -------------------------------------------------
 
         if executive is not None:
 
-            leads = find_row(executive, "KPI", "Total Leads")
-            accounts = find_row(executive, "KPI", "Unique Accounts")
             assets = find_row(executive, "KPI", "Assets Used")
-            jobs = find_row(executive, "KPI", "Job Titles")
-            countries = find_row(executive, "KPI", "Countries")
             topics = find_row(executive, "KPI", "Trending Topics")
 
-        if leads is not None:
+            if assets is not None:
+                # Keep temporarily until executive slide audit
+                ppt["CARD_TotalAssets"] = int(assets["Overall"])
 
-            ppt["CARD_Q1_TotalLeads"] = int(leads["Q1"])
-            ppt["CARD_Q2_TotalLeads"] = int(leads["Q2"])
-
-        if accounts is not None:
-
-            ppt["CARD_Q1_Accounts"] = int(accounts["Q1"])
-            ppt["CARD_Q2_Accounts"] = int(accounts["Q2"])
-
-        if assets is not None:
-
-            ppt["CARD_Q1_Assets"] = int(assets["Q1"])
-            ppt["CARD_Q2_Assets"] = int(assets["Q2"])
-
-            # Keep temporarily until executive slide audit
-            ppt["CARD_TotalAssets"] = int(assets["Overall"])
-
-        if jobs is not None:
-
-            ppt["CARD_Q1_JobTitles"] = int(jobs["Q1"])
-            ppt["CARD_Q2_JobTitles"] = int(jobs["Q2"])
-
-        if countries is not None:
-
-            ppt["CARD_Q1_Country"] = int(countries["Q1"])
-            ppt["CARD_Q2_Country"] = int(countries["Q2"])
-
-        if topics is not None:
-
-            # Keep temporarily until executive slide audit
-            ppt["CARD_TrendingTopics"] = int(topics["Overall"])
+            if topics is not None:
+                # Keep temporarily until executive slide audit
+                ppt["CARD_TrendingTopics"] = int(topics["Overall"])
 
         if snapshot is not None:
 
@@ -346,16 +475,23 @@ class PresentationData:
                 )
 
             if assets is not None:
-                ppt["CARD_AssetsUsed"] = assets["Overall"]
+                ppt["CARD_AssetsUsed"] = self.format_count(assets["Overall"])
 
             if jobs is not None:
-                ppt["CARD_JobTitles"] = jobs["Overall"]
+                ppt["CARD_JobTitles"] = self.format_count(jobs["Overall"])
 
             if weeks is not None:
-                ppt["CARD_WeeksInMarket"] = weeks
+                ppt["CARD_WeeksInMarket"] = self.format_count(weeks)
 
             if countries is not None:
-                ppt["CARD_Country"] = countries["Overall"]
+
+                ppt["CARD_Country"] = self.format_count(countries["Overall"])
+
+                ppt["CARD_CountryLabel"] = {
+                    "object": "CARD_Country",
+                    "group_child_index": 2,
+                    "text": self.pluralize_country(countries["Overall"]),
+                }
 
             if start is not None:
                 ppt["Campaign_Start"] = start["Overall"]
@@ -395,7 +531,16 @@ class PresentationData:
 
                 ppt["KPI_JobTitleGrowth"] = jobs["% Change"]
 
-        if optimization_table is not None:
+        # The fixed 2-slot Optimization Insights table only means
+        # "before vs after" when there genuinely are 2 comparable slots.
+        # Whenever the comparison spans 3+ (e.g. Full Campaign grouped
+        # into several months), use the first-vs-last Comparison
+        # Overview instead so Status isn't stuck at "No Change" just
+        # because _period_columns() had to duplicate a single slot.
+        if len(comparison_slots) > 2:
+            optimization_table = self.tables.get("Comparison Overview")
+
+        if optimization_table is not None and not optimization_table.empty:
 
             metrics = {
 
@@ -421,98 +566,178 @@ class PresentationData:
 
                 if row is not None:
 
-                    ppt[object_name] = row["Status"]
+                    # Each StatusPill_* name appears twice in the deck --
+                    # once on the QoQ Metrics detail slide, once more
+                    # (nested two groups deep) on the Optimization
+                    # Highlights slide -- both showing the same metric's
+                    # status. Only occurrence 0 was ever being set, so
+                    # the second copy stayed stuck at the template's
+                    # static example value. Set both explicitly.
+                    ppt[object_name] = {
+                        "object": object_name,
+                        "occurrence": 0,
+                        "text": row["Status"],
+                    }
+
+                    ppt[f"{object_name}_Highlights"] = {
+                        "object": object_name,
+                        "occurrence": 1,
+                        "text": row["Status"],
+                    }
 
         # -------------------------------------------------
         # POWERPOINT TABLES
         # -------------------------------------------------
-        ppt["Table_QoQMetrics"] = self.tables.get(
-            "QoQ Comparison"
-        )
 
-        ppt["Table_TopEngagedAccounts"] = self.tables.get(
-            "Top Engaged Accounts"
-        )
+        top_engaged_accounts = self.tables.get("Top Engaged Accounts")
+
+        if top_engaged_accounts is not None:
+            top_engaged_accounts = top_engaged_accounts[
+                ["Account Name", "Leads"]
+            ].copy()
+
+        ppt["Table_TopEngagedAccounts"] = top_engaged_accounts
 
         ppt["Table_TopIntentCompanies"] = self.tables.get(
             "Top Intent Companies"
         )
 
-        ppt["Table_OptimizationHighlights"] = self.tables.get(
-            "Optimization Insights"
-        )
+        # Reuse `optimization_table` as already resolved above (which
+        # switches to the first-vs-last Comparison Overview whenever
+        # comparison_slots > 2) so the Recommendation text here always
+        # matches whatever trend the StatusPill_* badges are showing --
+        # not the fixed 2-slot table's always-zero-change verdict.
+        # The template's table only has Metric/Recommendation columns
+        # (Status renders as separate pill shapes, not a table column),
+        # so keep only those two -- the source table carries extra
+        # columns (period values, % Change, Status) that would otherwise
+        # shift into the wrong cells.
+        optimization_highlights = optimization_table
 
-        qoq_chart = self.tables["QoQ Comparison"]
+        if optimization_highlights is not None:
+            optimization_highlights = optimization_highlights[
+                ["Metric", "Recommendation"]
+            ].copy()
 
-        qoq_chart = qoq_chart[
-            qoq_chart["Metric"].isin([
-                "Total Leads",
-                "Unique Accounts"
-            ])
-        ][["Metric", "Q1", "Q2"]]
+        ppt["Table_OptimizationHighlights"] = optimization_highlights
 
-        ppt["CHART_Q1Q2Comparison"] = qoq_chart
+        # QoQ table + comparison chart: the 2-period case (Quarterly,
+        # Custom, and Full Campaign/Monthly whenever comparison_slots
+        # still has only 2 entries) reuses the existing Change/% Change
+        # table as before. 3+ comparison_slots (Month over Month, or
+        # Full Campaign spanning 3+ months) means a single "Change"
+        # column can't show a before/after pair per period -- show
+        # Metric + one column per slot, plus an overall % Change
+        # (first slot vs last, the same figure already driving the
+        # Status pills below) rather than dropping it.
+
+        if len(comparison_slots) > 2:
+
+            metric_names = [
+                "Total Leads", "Unique Accounts",
+                "Assets Used", "Job Titles", "Countries"
+            ]
+
+            overall_change = self.tables.get("Comparison Overview")
+
+            rows = []
+
+            for metric in metric_names:
+
+                row = {"Metric": metric}
+
+                for slot in comparison_slots:
+                    row[slot["label"]] = slot["metrics"][metric]
+
+                if overall_change is not None and not overall_change.empty:
+
+                    change_row = overall_change[overall_change["Metric"] == metric]
+
+                    if not change_row.empty:
+                        row["% Change"] = change_row.iloc[0]["% Change"]
+
+                rows.append(row)
+
+            comparison_df = pd.DataFrame(rows)
+
+            ppt["CHART_Q1Q2Comparison"] = comparison_df[
+                comparison_df["Metric"].isin(["Total Leads", "Unique Accounts"])
+            ][["Metric"] + [slot["label"] for slot in comparison_slots]]
+
+            if "% Change" in comparison_df.columns:
+                comparison_df = comparison_df.copy()
+                comparison_df["% Change"] = comparison_df["% Change"].apply(
+                    self.format_percent
+                )
+
+            ppt["Table_QoQMetrics"] = comparison_df
+
+        else:
+
+            qoq_table = self.tables.get("QoQ Comparison")
+
+            if qoq_table is not None and "% Change" in qoq_table.columns:
+                qoq_table = qoq_table.copy()
+                qoq_table["% Change"] = qoq_table["% Change"].apply(
+                    self.format_percent
+                )
+
+            ppt["Table_QoQMetrics"] = qoq_table
+
+            qoq_chart = self.tables["QoQ Comparison"]
+
+            qoq_chart = qoq_chart[
+                qoq_chart["Metric"].isin([
+                    "Total Leads",
+                    "Unique Accounts"
+                ])
+            ][["Metric", "Q1", "Q2"]]
+
+            # _period_columns()'s "Q1"/"Q2" column names are generic
+            # placeholders -- fine as-is for a real 2-quarter/2-month
+            # comparison, but wrong for Custom mode's single user-picked
+            # range (there's no "quarter" to speak of). Custom is the
+            # only mode where the per-period detail collapses to one
+            # slot while the comparison still has two -- that structural
+            # signature (rather than checking the mode directly) is what
+            # tells us to relabel the chart's legend with the real
+            # "Period 1"/"Period 2" comparison_slots labels instead.
+            slots = periods.get("slots", [])
+
+            if len(slots) == 1 and len(comparison_slots) == 2:
+                qoq_chart = qoq_chart.rename(columns={
+                    "Q1": comparison_slots[0]["label"],
+                    "Q2": comparison_slots[1]["label"],
+                })
+
+            ppt["CHART_Q1Q2Comparison"] = qoq_chart
 
         # -------------------------------------------------
         # TREND ANALYSIS CHART
+        #
+        # Built entirely by LeadGenAnalyzer._build_trend_projection() --
+        # which real periods appear (individual months, grouped
+        # 3-month "quarters", or the 2 selected periods) and how far
+        # the forecast extends both vary by mode. The "Is Forecast"
+        # column tells ppt_engine.replace_chart() which trailing points
+        # to render dashed; it isn't itself a chart series.
         # -------------------------------------------------
 
-        qoq = self.tables["QoQ Comparison"]
+        ppt["Chart_TrendAnalysis"] = self.tables["Trend Projection"]
 
-        lead_row = qoq[qoq["Metric"] == "Total Leads"].iloc[0]
-        account_row = qoq[qoq["Metric"] == "Unique Accounts"].iloc[0]
+        trend_projection = self.tables["Trend Projection"]
 
-        q1_leads = int(lead_row["Q1"])
-        q2_leads = int(lead_row["Q2"])
+        forecast_labels = trend_projection.loc[
+            trend_projection["Is Forecast"], "Period"
+        ].tolist()
 
-        q1_accounts = int(account_row["Q1"])
-        q2_accounts = int(account_row["Q2"])
+        if forecast_labels:
 
-        # Linear projection for Leads
-        lead_growth = q2_leads - q1_leads
-
-        q3_leads = q2_leads + lead_growth
-        q4_leads = q3_leads + lead_growth
-
-        # Match approved presentation projection for Accounts
-        account_growth = q2_accounts - q1_accounts
-
-        q3_accounts = round(
-            q2_accounts + account_growth * 1.19
-        )
-
-        q4_accounts = round(
-            q3_accounts + account_growth * 1.41
-        )
-
-        import pandas as pd
-
-        trend_chart = pd.DataFrame({
-
-            "Quarter": [
-                "Q1",
-                "Q2",
-                "Q3",
-                "Q4"
-            ],
-
-            "Total Leads": [
-                q1_leads,
-                q2_leads,
-                q3_leads,
-                q4_leads
-            ],
-
-            "Unique Accounts": [
-                q1_accounts,
-                q2_accounts,
-                q3_accounts,
-                q4_accounts
-            ]
-
-        })
-
-        ppt["Chart_TrendAnalysis"] = trend_chart
+            ppt["AI_TrendAnalysisChartNote"] = (
+                f"*{', '.join(forecast_labels)} figures are an illustrative, "
+                "directional projection based on the observed trend -- "
+                "not a guarantee of future performance."
+            )
         
         # -------------------------------------------------
         # CONTENT PERFORMANCE CHART
@@ -530,11 +755,13 @@ class PresentationData:
             width=18
         )
 
-        # Highest performer first
+        # Highest performer first, top 10 only -- a campaign with many
+        # assets would otherwise plot all of them and overflow the chart
+        # regardless of analysis mode.
         asset_chart = asset_chart.sort_values(
             by="Leads",
             ascending=False
-        )
+        ).head(10)
 
         ppt["Chart_ContentPerformance"] = asset_chart
 
@@ -567,6 +794,9 @@ class PresentationData:
 
         topic_distribution = self.tables["Topic Categories"].copy()
 
+        # Keep Top 8 only
+        topic_distribution = topic_distribution.nlargest(8, "Mentions")
+
         ppt["Chart_TopicDistribution"] = topic_distribution
 
         # -------------------------------------------------
@@ -584,5 +814,21 @@ class PresentationData:
         buying_stage_chart = self.tables["Buying Stage Distribution"].copy()
 
         ppt["Chart_BuyingStage"] = buying_stage_chart
+
+        # KPI_BuyingStage1 sits next to the "No Active Signals" caption,
+        # KPI_BuyingStage2 next to the "Consideration + Decision" caption
+        # (confirmed by on-slide position, not by the shape names' own
+        # 1/2 suffixes, which don't match up with the captions).
+        stage_counts = buying_stage_chart.set_index(
+            "Predictive Buying Stage"
+        )["Accounts"]
+
+        ppt["KPI_BuyingStage1"] = self.format_count(
+            int(stage_counts.get("No Active Signals", 0))
+        )
+
+        ppt["KPI_BuyingStage2"] = self.format_count(
+            int(stage_counts.get("Decision", 0) + stage_counts.get("Consideration", 0))
+        )
 
         return ppt

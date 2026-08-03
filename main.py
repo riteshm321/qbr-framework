@@ -19,6 +19,7 @@ from core.date_engine import *
 from core.detector import detect_dataset
 
 import os
+import pandas as pd
 
 validate_files(INPUT_DIR)
 
@@ -82,6 +83,36 @@ manager.select_analysis()
 
 resolve_period(manager.analysis_type, datasets)
 
+# -------------------------------------------------------------
+# Keep an unfiltered copy of the Leads report before the window-scoping
+# below -- Campaign Snapshot (slide 4) always shows the true full
+# campaign, even in Quarterly/Custom modes where ANALYSIS_WINDOW is
+# narrower (just the union of the 2 selected periods, not the whole
+# campaign span).
+# -------------------------------------------------------------
+
+full_leads = datasets[LEAD_DETAIL].copy()
+
+# -------------------------------------------------------------
+# Scope every dataset to the selected window, so "Overall" KPIs
+# reflect the period you chose, not just whatever date range
+# happened to be in the input files.
+# -------------------------------------------------------------
+
+window_start = pd.to_datetime(config.ANALYSIS_WINDOW[0])
+window_end = pd.to_datetime(config.ANALYSIS_WINDOW[1])
+
+for name in list(datasets.keys()):
+
+    df = datasets[name]
+
+    if "Date" not in df.columns:
+        continue
+
+    mask = (df["Date"] >= window_start) & (df["Date"] <= window_end)
+
+    datasets[name] = df.loc[mask].reset_index(drop=True)
+
 print("\n")
 
 for name, df in datasets.items():
@@ -96,7 +127,7 @@ for name, df in datasets.items():
 
 from campaign_types.leadgen import LeadGenAnalyzer
 
-analysis = LeadGenAnalyzer(datasets).run()
+analysis = LeadGenAnalyzer(datasets, full_leads=full_leads).run()
 
 print()
 
@@ -286,6 +317,7 @@ presentation = story.build()
 
 presentation.tables = analysis.tables
 presentation.results = analysis.results
+presentation.campaign["periods"] = analysis.period_meta
 
 chart_tables = [
     "Trending Account Summary",
@@ -310,12 +342,26 @@ for name in chart_tables:
         print(df.head())
 
 from presentation.ppt_engine import PowerPointEngine
-presentation.metadata["report_title"] = "AUTOMATED QBR"
-presentation.metadata["report_period"] = "Jan 2026 - Jul 2026"
+presentation.metadata["report_title"] = f"{config.CLIENT_NAME} QBR"
+presentation.metadata["report_period"] = analysis.period_meta["overall_label"]
 ppt = PowerPointEngine()
 
+# Whole slides that only exist to show one report's data -- remove them
+# entirely when that report had no rows at all, rather than leaving the
+# template's own static example content on screen looking like real data.
+empty_data_slides = []
+
+if analysis.trending_topics.empty:
+    empty_data_slides.append("Chart_TrendingTopics")
+
 ppt.create(
-    presentation.to_ppt_dictionary()
+    presentation.to_ppt_dictionary(),
+    # Campaign Snapshot (slide 4) always shows one merged box for the
+    # whole campaign, regardless of analysis mode -- see PERIOD_Q1/Q2
+    # in presentation_data.py.
+    merge_period_boxes=True,
+    periods=analysis.period_meta,
+    empty_data_slides=empty_data_slides
 )
 
 from presentation.ppt_scanner import PPTScanner

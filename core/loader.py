@@ -169,7 +169,7 @@ def _parse(rows, file, reader):
         if kind == "metadata":
             metadata.update(a)
 
-        elif kind == "table" and b > 0:
+        elif kind == "table" and b >= 0:
             candidates.append((a, b))
 
     if not candidates:
