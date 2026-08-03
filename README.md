@@ -6,6 +6,16 @@ hardcoding. Drop in a client's reports, pick an analysis window, and it
 detects the datasets, computes every KPI/table/chart, and fills the
 existing QBR template automatically.
 
+**Vision for the finished tool:** drop the campaign's report exports into
+`input/`, run the packaged application, get a finished QBR deck out — no
+setup, no prompts beyond picking the analysis window. Today that's a
+Python script you run with `python main.py`; packaging it as a
+standalone executable is planned. The analysis engine is also built to
+extend to every Madison Logic campaign type — **Lead Gen** (built out
+today), **Display**, **Lead Gen + Display**, **Audio**, and **CTV** (all
+planned) — so the same tool covers any campaign type a client is running,
+not just lead gen.
+
 ## What it does
 
 1. **Loads** whatever reports you drop into `input/` and classifies each
@@ -14,10 +24,10 @@ existing QBR template automatically.
 2. **Resolves a reporting period** (`core/period_resolver.py`) from one
    of four analysis modes (see below), auto-detected from the actual
    date range in the data.
-3. **Runs the analysis** (`campaign_types/leadgen.py`) — KPIs, funnel,
-   buying-stage distribution, trending topics/accounts, asset
-   performance, period-over-period comparisons, and a trend/forecast
-   projection.
+3. **Runs the analysis** (`campaign_types/leadgen.py`, today's built-out
+   analyzer) — KPIs, funnel, buying-stage distribution, trending
+   topics/accounts, asset performance, period-over-period comparisons,
+   and a trend/forecast projection.
 4. **Generates AI narrative content** (executive summary, recommendations,
    speaker notes, etc.) via Gemini, cached to `output/ai_response.json`
    so you aren't re-billed on every run.
@@ -44,7 +54,7 @@ Picked interactively when you run `main.py`:
 
 ```
 ai/              Gemini client, prompt building, AI response -> Markdown export
-campaign_types/  Per-campaign-type analyzers (LeadGen is the built-out one)
+campaign_types/  Per-campaign-type analyzers (LeadGen is built out; Display/Audio/CTV are placeholder stubs)
 chart_engine/    Standalone chart image export
 core/            Report loading/cleaning/validation, date splitting, period resolution
 datasets/        Typed wrappers around individual report datasets
@@ -97,6 +107,23 @@ subsequent run, regardless of which client/period you're analyzing next.
 Delete that file (or set `USE_CACHED_AI = False`) to force fresh AI
 content — useful when you've changed to a genuinely different client's
 data.
+
+## Roadmap
+
+This is the direction the project is headed — not yet built:
+
+- **Standalone executable.** Package the tool so a user just adds the
+  client's report exports to `input/` and runs the app — no Python
+  environment, no manual dependency install.
+- **Full campaign-type coverage.** Extend the analyzer layer beyond Lead
+  Gen to also support:
+  - Display
+  - Lead Gen + Display (combined)
+  - Audio
+  - CTV
+
+  `campaign_types/audio.py`, `campaign_types/ctv.py`, and
+  `campaign_types/display.py` exist today as empty placeholders for this.
 
 ## Ground rules for contributing
 
