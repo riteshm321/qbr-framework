@@ -13,8 +13,10 @@ input/*
 logs/*
 !logs/.gitkeep
 
-# PowerPoint files (working/legacy templates + generated decks) -- never tracked
+# PowerPoint files (legacy copies + generated decks) -- never tracked,
+# except the live template the codebase actually runs against.
 *.pptx
+!templates/LeadGen_QBR_Template.pptx
 
 # Misc generated/debug artifacts
 Objects.txt
