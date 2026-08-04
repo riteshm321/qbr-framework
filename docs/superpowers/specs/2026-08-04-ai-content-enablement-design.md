@@ -264,7 +264,7 @@ constructed in `main.py` after `analysis` exists, so this needs no reordering.
 **Phase 2 — modified**
 - `ai/prompt_builder.py` — extend the response schema with the new sections
 - `engine/story_builder.py` — parse the new sections onto `presentation.ai`
-- `engine/presentation_data.py` — wire the 12 AI boxes and 6 deterministic boxes;
+- `engine/presentation_data.py` — wire the 13 AI boxes and 5 deterministic boxes;
   redirect the 6 salvageable dead keys; remove `AI_RecommendationsSummary`
 - `presentation/ppt_engine.py` — add `run_index` to `replace_text()`
 - `campaign_types/leadgen.py` — expose the counts the 6 deterministic boxes need,
@@ -299,33 +299,59 @@ Autodesk decks: *"'Medical billing' and 'patient payments' dominate conversation
 (slide 17), *"All 1,719 targeted accounts showed trending intent signals"*
 (slide 18), *"Twenty organizations scored 99–100 on ML intent"* (slide 19).
 
-### Not everything needs AI
+### The classification rule
 
-Reviewing each box's actual purpose, the 21 split three ways. Sending all of them
-to the AI would be wasteful and less accurate — a count is a count, and asking a
-language model to restate one only introduces a chance of it being wrong.
+**A box gets AI content if and only if it carries an insight or comment about the
+slide's data, chart, or graph.** Anything else — a label, a subtitle stating a
+count, boilerplate — is computed in code or left alone. Two reasons: a count
+restated by a language model is only a chance to get it wrong, and every
+unnecessary section inflates the prompt and the quota cost.
 
-**Deterministic — computed in code, no AI (6 boxes)**
+Applying that rule, the 21 split three ways.
 
-| Box | Slide | Content |
+**AI-generated (13 boxes)** — each interprets what the slide shows:
+
+| Box | Slide | The insight it carries |
 |---|---|---|
-| `AI_TrendAnalysisHeading` | 13 | period label instead of hardcoded "H1" |
-| `AI_BuyingStageHeading1` | 21 | label built from the stage names actually present |
-| `AI_BuyingStageHeading2` | 21 | as above, for the second grouping |
-| `AI_BuyingStageSummary` | 21 | signal-showing account count |
-| `AI_OptimizationHighlightsSummary` | 23 | period labels instead of "H1"/"H2" |
-| `AI_ClosingMessage` | 27 | period label instead of "H1" |
+| `AI_TrendAnalysisHeading` | 13 | characterises the trajectory the chart shows |
+| `AI_TrendAnalysisSummary` | 13 | 3 bullets on what the projection means |
+| `AI_ContentPerformanceHeading` | 15 | characterises the spread across assets |
+| `AI_ContentPerformanceSummary` | 15 | 3 bullets on what the spread tells us |
+| `AI_AudienceInterestHeading` | 17 | which themes dominate the topic mix |
+| `AI_AudienceInterestSummary` | 17 | what that concentration implies |
+| `AI_EngagementSummary` | 18 | 3 bullets reading the funnel |
+| `AI_TopAccountsFooter` | 19 | what the intent scores imply for outreach |
+| `AI_OptimizationFooter` | 23 | the bottom-line lever |
+| `AI_KeyLearnings` | 24 | 5 titled learnings |
+| `AI_H2Recommendations` | 25 | 5 forward actions |
+| `AI_PartnershipSummary` | 26 | what the intent layer means for the partnership |
+| `AI_ValueAddHeading` | 26 | characterises the value delivered beyond core leads |
 
-**AI-generated (12 boxes)** — genuine interpretation, not restatement:
-`AI_TrendAnalysisSummary`, `AI_ContentPerformanceHeading`,
-`AI_ContentPerformanceSummary`, `AI_AudienceInterestHeading`,
-`AI_AudienceInterestSummary`, `AI_EngagementSummary`, `AI_TopAccountsFooter`,
-`AI_OptimizationFooter`, `AI_KeyLearnings`, `AI_H2Recommendations`,
-`AI_PartnershipSummary`, `AI_ValueAddHeading`.
+Note `AI_TrendAnalysisHeading` is AI, not computed: "growth trajectory" is a claim
+about direction that would be wrong on a declining campaign, and it sits in the
+same role as the slide-15 and slide-17 headings above it.
 
-**Leave as-is (3 boxes)** — inspected and confirmed client-agnostic, containing no
-data and no period reference: `AI_EngagementHeading`, `AI_TopAccountsHeading`,
-`AI_TopAccountsSummary`.
+**Deterministic — computed in code, no AI (5 boxes)** — labels and boilerplate,
+none of which interpret anything:
+
+| Box | Slide | Content | Why not AI |
+|---|---|---|---|
+| `AI_BuyingStageHeading1` | 21 | label naming the grouped stages | names which stages the adjacent KPI counts |
+| `AI_BuyingStageHeading2` | 21 | as above, second grouping | same |
+| `AI_BuyingStageSummary` | 21 | subtitle stating the account count | a count, not a comment |
+| `AI_OptimizationHighlightsSummary` | 23 | subtitle with period labels | template sentence + period name |
+| `AI_ClosingMessage` | 27 | closing boilerplate | no data reference at all |
+
+The two currently period-hardcoded ones must also drop their directional
+assumptions: "Turning H1 signals into H2 action" and "build on H1 momentum" both
+presume growth, so the computed versions use direction-neutral wording.
+
+**Leave as-is (3 boxes)** — inspected and confirmed to contain no client data, no
+figures, and no directional claim, so there is nothing to go stale:
+`AI_EngagementHeading` ("From intent-based targeting to active engagement"),
+`AI_TopAccountsHeading` ("TOP ENGAGED ACCOUNTS (BY LEADS)"),
+`AI_TopAccountsSummary` ("The organizations showing the strongest engagement and
+buying intent").
 
 ### Resolving the 7 dead keys
 
@@ -362,7 +388,7 @@ New sections, added to `ai/prompt_builder.py`'s schema. `Recommendations.actions
 and `ValueAdd` already exist and are reused rather than duplicated.
 
 ```
-"TrendAnalysis":        { "bullets": [3] }
+"TrendAnalysis":        { "heading": "", "bullets": [3] }
 "ContentPerformance":   { "heading": "", "bullets": [3] }
 "AudienceInterest":     { "heading": "", "summary": "" }
 "Engagement":           { "bullets": [3] }
