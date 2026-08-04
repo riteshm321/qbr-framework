@@ -63,8 +63,9 @@ IMPORTANT RULES
    plainly and treat it as an optimization opportunity.
 
 9. FORMATTING. Write counts of a thousand or more with a thousands separator
-   ("1,032", not "1032"), so the narrative matches the figures printed on the
-   slides beside it.
+   ("12,345", not "12345"), so the narrative matches the figures printed on the
+   slides beside it. That is a formatting example only -- never treat it, or any
+   number in these instructions, as campaign data.
 
 ------------------------------------------------------------
 
@@ -231,10 +232,18 @@ the limit.
   max 20 words each.
 
 - Partnership.summary: read "Value Add Metrics" and "Top Intent Accounts".
-  Max 60 words.
+  THREE COMPLETE SENTENCES, 45-60 words in total. This one is a wide full-width
+  panel rather than a narrow card, so unlike every other section above it needs
+  a full paragraph -- a single clipped clause leaves most of the panel empty.
+  Sentence 1: what the intent layer identified. Sentence 2: how much of it was
+  engaged. Sentence 3: what is sales-ready and why that matters next.
+  When quoting a figure from "Value Add Metrics", describe it using that row's
+  "Caption" wording rather than its short "Metric" name -- the captions state
+  which population each figure is measured against, and the names do not.
 
-- ValueAdd.heading: what the intent layer added beyond core lead delivery.
-  Max 27 words.
+- ValueAdd.heading: what the intent layer added beyond core lead delivery, as
+  ONE COMPLETE SENTENCE of 12-25 words. This is the slide's lead-in line under
+  a large title, so a three-word fragment reads as unfinished.
 
 - Every "heading" and "footer" is a single sentence that characterises what the
   data shows, rather than restating a number already printed on the slide.

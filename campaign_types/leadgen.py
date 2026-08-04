@@ -1469,6 +1469,13 @@ class LeadGenAnalyzer:
         reach_to_engage_pct = round(reached / targeted * 100, 1) if targeted else 0
 
         engagement = self.account_engagement
+
+        # Deliberately the same expression build_funnel_table() uses for its
+        # "Reached (All Accounts)" figure, so this average's denominator is
+        # always exactly the number the funnel slide shows as reached. The
+        # caption below names that figure rather than saying "per account",
+        # which invited it to be read against the 371 lead-generating accounts
+        # quoted elsewhere in the deck -- a different, smaller universe.
         unique_accounts = engagement["Account Name"].nunique()
         total_leads = engagement["Leads"].sum()
 
@@ -1495,7 +1502,7 @@ class LeadGenAnalyzer:
             {
                 "Metric": "Avg Leads Per Account",
                 "Value": f"{avg_leads_per_account}",
-                "Caption": "Avg. leads generated per account, across assets",
+                "Caption": f"Avg. leads across the {unique_accounts:,} accounts reached",
             },
         ])
 

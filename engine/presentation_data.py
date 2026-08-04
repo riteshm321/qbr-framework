@@ -144,6 +144,27 @@ class PresentationData:
         return "Country" if count == 1 else "Countries"
 
     @staticmethod
+    def at_least(text, min_words, fallback):
+
+        """
+        AI text, or `fallback` when the model returned something too short to
+        fill its box.
+
+        The prompt states a length for every section, but a model that leans
+        terse can answer a lead-in line with a three-word fragment, which reads
+        as unfinished next to a large title. The fallback must itself be built
+        from campaign data, never a fixed sentence, so this stays correct for
+        any client.
+        """
+
+        text = str(text or "").strip()
+
+        if len(text.split()) >= min_words:
+            return text
+
+        return fallback
+
+    @staticmethod
     def clip(text, limit):
 
         """
@@ -289,7 +310,7 @@ class PresentationData:
 
             direction = "+" if pct >= 0 else ""
 
-            return f"{direction}{pct:.1f}%  ({before:,} → {after:,})"
+            return f"{direction}{pct:.2f}%  ({before:,} → {after:,})"
 
         topic_categories = self.tables.get("Topic Categories")
 
@@ -630,8 +651,40 @@ class PresentationData:
         # with the body in paragraph 2.
         # -------------------------------------------------
 
+        # Falls back to a sentence built from this campaign's own value-add
+        # figures when the model answers too briefly for the slide's lead-in
+        # line. Both the AI text and the fallback are campaign-derived.
+        value_add_metrics_table = self.tables.get("Value Add Metrics")
+
+        identified = engaged = None
+
+        if value_add_metrics_table is not None and not value_add_metrics_table.empty:
+
+            by_metric = {
+                row["Metric"]: row["Value"]
+                for _, row in value_add_metrics_table.iterrows()
+            }
+
+            identified = by_metric.get("Accounts Identified")
+            engaged = by_metric.get("Accounts Engaged")
+
+        if identified and engaged:
+            value_add_fallback = (
+                f"Beyond core lead delivery, intent and trending signals identified "
+                f"{identified} accounts and actively engaged {engaged} of them."
+            )
+        else:
+            value_add_fallback = (
+                "Beyond core lead delivery, intent and trending signals identified "
+                "and qualified an expanded pool of buying-ready accounts."
+            )
+
         ppt["AI_ValueAddHeading"] = self.clip(
-            self.ai.get("value_add_heading"),
+            self.at_least(
+                self.ai.get("value_add_heading"),
+                10,
+                value_add_fallback
+            ),
             190
         )
 
