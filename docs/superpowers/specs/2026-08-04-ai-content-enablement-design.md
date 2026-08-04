@@ -2,8 +2,11 @@
 
 **Date:** 2026-08-04
 **Status:** Design — awaiting review
-**Scope:** Parts A and B only. Part C (wiring the 21 unwired AI text boxes) is a
-separate spec, deliberately deferred — see [Deferred: Part C](#deferred-part-c).
+**Scope:** Three parts, built in two phases.
+**Phase 1** — A (provider fallback) + B (scoped caching).
+**Phase 2** — C (wire the 21 unwired AI text boxes, resolve the 7 dead keys).
+Phase 2 is sequenced second because iterating on 21 boxes of content requires
+working generation and correct caching first.
 
 ## Context
 
@@ -33,13 +36,15 @@ Two consequences we now need to fix:
   unchanged data must cost zero API calls.
 - Never crash the pipeline because AI failed. A deck with blank AI sections is an
   acceptable degraded outcome; a traceback is not.
+- Every `AI_*` text box in the deck shows content derived from the current
+  client's data, or nothing at all — never another campaign's example text.
 
 ## Non-goals
 
-- Wiring the 21 currently-unwired `AI_*` text boxes (Part C).
-- Extending the prompt schema to cover those boxes (Part C).
-- Changing which slides exist or how non-AI content is computed.
+- Changing which slides exist or how non-AI (chart/table/KPI) content is computed.
 - Paid provider tiers.
+- Migrating off the deprecated `google.generativeai` package (see final section).
+- Rewriting the template. All fixes are code-side, per the project's standing rule.
 
 ## A. Provider fallback chain
 
@@ -128,18 +133,24 @@ instead, so identity is never silently weaker than the client alone.
 
 ### Data fingerprint
 
-The fingerprint is a SHA-256 over `output/qbr_package.json` — the exact analytics
-payload embedded in the prompt — serialized canonically (`sort_keys=True`),
-**with `Metadata["Generated On"]` removed**.
+**The `Metadata["Generated On"]` timestamp is removed from
+`export/ai_export.py` outright**, rather than being filtered out at fingerprint
+time.
 
-That exclusion is essential, not cosmetic. `export/ai_export.py` stamps that field
-with `datetime.now().strftime("%d-%b-%Y %H:%M")`, so including it would change the
-fingerprint every minute and the cache would effectively never hit — silently
-defeating the entire feature while appearing to work.
+That field is stamped with `datetime.now().strftime("%d-%b-%Y %H:%M")`, so it
+changes every minute. Any fingerprint computed over a payload containing it would
+change on every run, the cache would never hit, and the feature would burn quota
+while appearing to work correctly. Deleting the field is simpler than
+special-casing it in the hashing code, and it removes the trap permanently
+instead of leaving a landmine for whoever next edits either file.
 
-The rest of `Metadata` (Client / Program / Campaign Type / Report Mode) is also
-excluded from the fingerprint, because those values are already explicit identity
-fields; including them twice adds nothing and makes debugging a mismatch harder.
+Nothing consumes the field — verified by grep, it is produced in exactly one place
+and read nowhere. Provenance is not lost: each cache entry records its own
+`generated_at`.
+
+With the timestamp gone, `output/qbr_package.json` is deterministic for a given
+dataset, so the fingerprint is simply a SHA-256 over the whole file, serialized
+canonically (`sort_keys=True`). No field exclusions, no special cases.
 
 Effect: re-running deck generation on unchanged data always hits cache (zero API
 calls — the primary use case). A genuine data refresh produces a new fingerprint
@@ -234,14 +245,15 @@ constructed in `main.py` after `analysis` exists, so this needs no reordering.
 
 ## Files touched
 
-**New**
+**Phase 1 — new**
 - `ai/provider_chain.py` — ordered provider chain, availability, failover
 - `ai/groq_client.py` — Groq via `openai` SDK with `base_url`
 - `ai/content_cache.py` — identity, fingerprint, load/store
 
-**Modified**
+**Phase 1 — modified**
 - `config.py` — `AI_PROVIDER_CHAIN`, `AI_CACHE_MODES`, `AI_FORCE_REGENERATE`; retire `USE_CACHED_AI`
 - `ai/ai_engine.py` — use the chain; fence-strip; return provider name alongside content
+- `export/ai_export.py` — delete the `Generated On` timestamp field
 - `engine/story_builder.py` — accept `period_meta`; consult cache; store on success
 - `main.py` — pass `analysis.period_meta` into `StoryBuilder`
 - `requirements.txt` — add `openai`. It is installed on the current machine and
@@ -249,7 +261,16 @@ constructed in `main.py` after `analysis` exists, so this needs no reordering.
   fresh clone would fail the moment the chain touches Groq or OpenAI.
 - `.gitignore` — `output/` is already ignored, so `output/ai_cache/` needs no new rule
 
-## Verification
+**Phase 2 — modified**
+- `ai/prompt_builder.py` — extend the response schema with the new sections
+- `engine/story_builder.py` — parse the new sections onto `presentation.ai`
+- `engine/presentation_data.py` — wire the 12 AI boxes and 6 deterministic boxes;
+  redirect the 6 salvageable dead keys; remove `AI_RecommendationsSummary`
+- `presentation/ppt_engine.py` — add `run_index` to `replace_text()`
+- `campaign_types/leadgen.py` — expose the counts the 6 deterministic boxes need,
+  if not already present in `period_meta` / `results`
+
+## Phase 1 verification
 
 1. **Cache hit is genuinely free.** Run the pipeline twice, unchanged data, same
    mode. Second run must log a cache hit and make zero API calls. This is the
@@ -267,37 +288,104 @@ constructed in `main.py` after `analysis` exists, so this needs no reordering.
    that still generates.
 6. **Custom mode.** Confirm no cache entry is written and no cache is read.
 7. **Existing modes unaffected.** Full pipeline run per mode, exit 0, no new
-   `[NOT FOUND]` beyond the 7 known dead keys documented below.
+   `[NOT FOUND]` beyond the 7 known dead keys, which Phase 2 resolves.
 
-## Deferred: Part C
+## Phase 2 — Part C: wire the 21 unwired boxes
 
-Audit finding, recorded here so it is not lost. The template contains **37**
-`AI_*` text boxes. **16** are wired. The remaining **21** display the template's
-own static example text for every client and every run — currently visible in
-generated decks as e.g. *"'Medical billing' and 'patient payments' dominate
-conversation"* (slide 17), *"All 1,719 targeted accounts showed trending intent
-signals"* (slide 18), and *"Twenty organizations scored 99–100 on ML intent"*
-(slide 19).
+The template contains **37** `AI_*` text boxes; **16** are wired. The other **21**
+display the template's own example text — from what appears to have been a
+healthcare campaign — for every client, every run. Currently shipping in generated
+Autodesk decks: *"'Medical billing' and 'patient payments' dominate conversation"*
+(slide 17), *"All 1,719 targeted accounts showed trending intent signals"*
+(slide 18), *"Twenty organizations scored 99–100 on ML intent"* (slide 19).
 
-Unwired: `AI_AudienceInterestHeading`, `AI_AudienceInterestSummary`,
-`AI_BuyingStageHeading1`, `AI_BuyingStageHeading2`, `AI_BuyingStageSummary`,
-`AI_ClosingMessage`, `AI_ContentPerformanceHeading`,
-`AI_ContentPerformanceSummary`, `AI_EngagementHeading`, `AI_EngagementSummary`,
-`AI_H2Recommendations`, `AI_KeyLearnings`, `AI_OptimizationFooter`,
-`AI_OptimizationHighlightsSummary`, `AI_PartnershipSummary`,
-`AI_TopAccountsFooter`, `AI_TopAccountsHeading`, `AI_TopAccountsSummary`,
-`AI_TrendAnalysisHeading`, `AI_TrendAnalysisSummary`, `AI_ValueAddHeading`.
+### Not everything needs AI
 
-Dead keys — set by `engine/presentation_data.py` but no such shape exists, so the
-content is silently discarded: `AI_RecommendationsSummary`,
-`AI_Recommendation1`–`AI_Recommendation5`, `AI_ValueAddSummary`. The template's
-real equivalents are the single box `AI_H2Recommendations` and
-`AI_PartnershipSummary`.
+Reviewing each box's actual purpose, the 21 split three ways. Sending all of them
+to the AI would be wasteful and less accurate — a count is a count, and asking a
+language model to restate one only introduces a chance of it being wrong.
 
-Part C must extend the prompt schema to produce this content before the boxes can
-be wired, then verify formatting slide by slide. It is sequenced after A+B because
-iterating on 21 boxes of content requires working generation and correct caching
-first.
+**Deterministic — computed in code, no AI (6 boxes)**
+
+| Box | Slide | Content |
+|---|---|---|
+| `AI_TrendAnalysisHeading` | 13 | period label instead of hardcoded "H1" |
+| `AI_BuyingStageHeading1` | 21 | label built from the stage names actually present |
+| `AI_BuyingStageHeading2` | 21 | as above, for the second grouping |
+| `AI_BuyingStageSummary` | 21 | signal-showing account count |
+| `AI_OptimizationHighlightsSummary` | 23 | period labels instead of "H1"/"H2" |
+| `AI_ClosingMessage` | 27 | period label instead of "H1" |
+
+**AI-generated (12 boxes)** — genuine interpretation, not restatement:
+`AI_TrendAnalysisSummary`, `AI_ContentPerformanceHeading`,
+`AI_ContentPerformanceSummary`, `AI_AudienceInterestHeading`,
+`AI_AudienceInterestSummary`, `AI_EngagementSummary`, `AI_TopAccountsFooter`,
+`AI_OptimizationFooter`, `AI_KeyLearnings`, `AI_H2Recommendations`,
+`AI_PartnershipSummary`, `AI_ValueAddHeading`.
+
+**Leave as-is (3 boxes)** — inspected and confirmed client-agnostic, containing no
+data and no period reference: `AI_EngagementHeading`, `AI_TopAccountsHeading`,
+`AI_TopAccountsSummary`.
+
+### Resolving the 7 dead keys
+
+The content for most of these is already generated and already parsed — it is
+merely written to shape names that do not exist. Redirecting is the fix; only one
+is genuinely surplus.
+
+| Dead key | Resolution |
+|---|---|
+| `AI_Recommendation1`–`5` | Redirect to `AI_H2Recommendations` paragraphs 1–5. `Recommendations.actions` already exists in the prompt schema and is already parsed by `story_builder.py` — nothing new to generate. |
+| `AI_ValueAddSummary` | Redirect to `AI_PartnershipSummary` paragraph 2. |
+| `AI_RecommendationsSummary` | **Remove.** No target box exists, and its content duplicates the five actions. Slide 25's paragraph 0 is the section title, not narrative. |
+
+### Paragraph and run structure
+
+These boxes are not single-run text boxes, and writing them naively would destroy
+the template's formatting. Verified structure:
+
+| Box | Structure |
+|---|---|
+| `AI_EngagementSummary`, `AI_ContentPerformanceSummary`, `AI_TrendAnalysisSummary` | para 0 = bold fixed label (keep), para 1 = blank spacer, paras 2–4 = three body lines |
+| `AI_KeyLearnings` | five pairs — even paras = bold title, odd paras = detail |
+| `AI_H2Recommendations` | para 0 = section title (keep). Paras 1–5 have **two runs**: run 0 = bold `"01   "` number prefix (keep), run 1 = the text |
+| `AI_PartnershipSummary` | para 0 = bold fixed label (keep), para 2 = body |
+
+**Engine requirement:** `PowerPointEngine.replace_text()` currently writes
+`paragraphs[paragraph_index].runs[0]`. `AI_H2Recommendations` needs run 1, so a
+`run_index` parameter is required. Without it, writing a recommendation would
+overwrite the `"01"` numbering.
+
+### Prompt schema extension
+
+New sections, added to `ai/prompt_builder.py`'s schema. `Recommendations.actions`
+and `ValueAdd` already exist and are reused rather than duplicated.
+
+```
+"TrendAnalysis":        { "bullets": [3] }
+"ContentPerformance":   { "heading": "", "bullets": [3] }
+"AudienceInterest":     { "heading": "", "summary": "" }
+"Engagement":           { "bullets": [3] }
+"TopAccounts":          { "footer": "" }
+"OptimizationHighlights": { "footer": "" }
+"KeyLearnings":         { "items": [ { "title": "", "detail": "" } x5 ] }
+"Partnership":          { "summary": "" }
+"ValueAdd":             { "heading": "", "summary": "" }   # heading added
+```
+
+Bullet and item counts are fixed to match the template's paragraph slots. The
+prompt states these counts explicitly, and the wiring code tolerates receiving
+fewer (remaining paragraphs are blanked, matching the table-row behaviour
+established in `replace_table`) or more (extras dropped).
+
+### Phase 2 verification
+
+Content quality cannot be asserted from a console log. Each of the 11 affected
+slides (13, 15, 17, 18, 19, 21, 23, 24, 25, 26, 27) is exported to PNG via
+PowerPoint COM and inspected for: text fitting its box without overflow or
+clipping, no leftover template sentences, numbers in the narrative agreeing with
+the numbers in the adjacent charts and tables, and preserved bold/size formatting
+on the fixed label paragraphs and number prefixes.
 
 ## Known issue noted in passing
 
