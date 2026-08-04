@@ -1350,11 +1350,16 @@ class PowerPointEngine:
         box.width = full_width
         background.width = full_width
 
-        # Move the now-redundant box/background well off the visible slide
-        off_slide = -spare_box.width * 4
-
+        # Delete the now-redundant box/background outright rather than
+        # parking them off the visible slide. Off-canvas shapes are not
+        # harmless: PowerPoint sizes the editing pane's scrollable canvas
+        # to enclose every shape, including ones outside the slide, so a
+        # shape sitting ~23in to the left adds a horizontal scrollbar and
+        # renders the slide flush against the right edge of the viewport
+        # -- which reads as the slide's content being "stuck to the right
+        # side" even though the content itself is correctly centered.
         for shape in (spare_box, spare_background):
-            shape.left = off_slide
+            shape._element.getparent().remove(shape._element)
 
         print("[MERGED] PERIOD_Q1 + PERIOD_Q2 into a single box")
 
