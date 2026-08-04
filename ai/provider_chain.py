@@ -32,10 +32,16 @@ def _openai():
     return OpenAIClient()
 
 
+def _manual():
+    from ai.manual_client import ManualClient
+    return ManualClient()
+
+
 FACTORIES = {
     "gemini": _gemini,
     "groq": _groq,
     "openai": _openai,
+    "manual": _manual,
 }
 
 
