@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-from datetime import datetime
 
 from config import CLIENT_NAME, PROGRAM_NAME, CAMPAIGN_TYPE, REPORT_MODE
 
@@ -29,9 +28,14 @@ class AIExporter:
 
                 "Campaign Type": CAMPAIGN_TYPE,
 
-                "Report Mode": REPORT_MODE,
+                "Report Mode": REPORT_MODE
 
-                "Generated On": datetime.now().strftime("%d-%b-%Y %H:%M")
+                # Deliberately no generation timestamp here. ai/content_cache.py
+                # fingerprints this file to decide whether the AI narrative can
+                # be reused, so a value that changes every run (as a timestamp
+                # does) would make the cache never hit and silently burn API
+                # quota on every single run. Each cache entry records its own
+                # generated_at instead.
 
             },
 

@@ -312,7 +312,11 @@ from presentation.presentation_assets import PresentationAssets
 PresentationAssets().generate()
 
 from engine.story_builder import StoryBuilder
-story = StoryBuilder()
+
+# period_meta identifies which period this run covers, so the AI narrative is
+# cached per client + campaign + period rather than globally (see
+# ai/content_cache.py).
+story = StoryBuilder(period_meta=analysis.period_meta)
 presentation = story.build()
 
 presentation.tables = analysis.tables

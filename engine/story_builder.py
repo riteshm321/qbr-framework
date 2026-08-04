@@ -1,51 +1,80 @@
 from engine.presentation_data import PresentationData
 from ai.ai_engine import AIEngine
+from ai import content_cache
 
-import json
-from pathlib import Path
-from config import USE_CACHED_AI
+import config
 
 
 class StoryBuilder:
 
-    def __init__(self):
+    def __init__(self, period_meta=None):
 
         self.presentation = PresentationData()
 
         self.ai = AIEngine()
 
-    def build(self):
+        # Needed to identify which period this run covers, so its AI content
+        # is cached separately from the same campaign's other periods.
+        self.period_meta = period_meta or {}
 
-        # AI generation is paused: USE_CACHED_AI means always reuse
-        # output/ai_response.json as-is, with no automatic freshness
-        # check against the current client/data -- calling Gemini
-        # happens only when that cache file doesn't exist at all (e.g.
-        # you've deleted it yourself because you specifically want new
-        # AI content generated for what's currently loaded).
-        if USE_CACHED_AI:
+    # ------------------------------------------------
 
-            cache = Path("output") / "ai_response.json"
+    def _resolve_content(self):
 
-            if cache.exists():
+        """
+        The AI narrative for this exact client + campaign + period + dataset,
+        generating it only when there's nothing cached for that combination.
 
-                with open(
-                    cache,
-                    encoding="utf-8"
-                ) as f:
+        Reuse is scoped deliberately tightly. Reusing across clients was the
+        old behaviour and put one client's narrative into another's deck;
+        reusing across datasets would leave the text quoting figures that
+        disagree with the charts beside it.
+        """
 
-                    ai_json = json.load(f)
+        identity = content_cache.build_identity(self.period_meta)
 
-                print("\nUsing cached AI response...\n")
+        if identity is None:
 
-            else:
+            # No analytics payload to fingerprint, so this run can't be
+            # identified. Generate, but don't record it under a key that might
+            # not describe it.
+            print("\n[AI CACHE] run not identifiable - generating without caching\n")
+            return self.ai.run()
 
-                print("\nCached AI not found. Running Gemini...\n")
+        if not content_cache.is_cacheable():
 
-                ai_json = self.ai.run()
+            print(
+                f"\n[AI CACHE] {config.REPORT_MODE} mode is not cached "
+                f"(see config.AI_CACHE_MODES) - generating fresh\n"
+            )
+            return self.ai.run()
+
+        print()
+
+        if config.AI_FORCE_REGENERATE:
+            print("  [AI CACHE] AI_FORCE_REGENERATE is on - ignoring any cached entry")
 
         else:
+            cached = content_cache.load(identity)
 
-            ai_json = self.ai.run()
+            if cached is not None:
+                print()
+                return cached
+
+            print(f"  [AI CACHE] MISS {content_cache.describe(identity)}")
+
+        ai_json = self.ai.run()
+
+        if ai_json is not None:
+            content_cache.store(identity, ai_json, self.ai.provider)
+
+        return ai_json
+
+    # ------------------------------------------------
+
+    def build(self):
+
+        ai_json = self._resolve_content()
 
         if ai_json is None:
             return self.presentation

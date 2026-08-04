@@ -1,9 +1,48 @@
 import json
 
-from ai.prompt_builder import PromptBuilder
-from ai.gemini_client import GeminiClient
-from ai.markdown_exporter import MarkdownExporter
 from pathlib import Path
+
+from ai.prompt_builder import PromptBuilder
+from ai.provider_chain import ProviderChain
+from ai.markdown_exporter import MarkdownExporter
+
+
+def strip_code_fences(text):
+
+    """
+    Models routinely wrap JSON in ```json ... ``` despite being told not to.
+    Treating that as a hard failure throws away otherwise perfectly good
+    content, so strip the fences before parsing.
+    """
+
+    stripped = text.strip()
+
+    if not stripped.startswith("```"):
+        return stripped
+
+    lines = stripped.splitlines()
+
+    if lines and lines[0].lstrip().startswith("```"):
+        lines = lines[1:]
+
+    if lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+
+    return "\n".join(lines).strip()
+
+
+def parse_response(text):
+
+    """Parsed AI JSON. Raises so ProviderChain can treat an unusable response
+    as a provider failure and move to the next one."""
+
+    parsed = json.loads(strip_code_fences(text))
+
+    if not isinstance(parsed, dict):
+        raise ValueError(f"expected a JSON object, got {type(parsed).__name__}")
+
+    return parsed
+
 
 class AIEngine:
 
@@ -11,9 +50,13 @@ class AIEngine:
 
         self.builder = PromptBuilder()
 
-        self.client = GeminiClient()
+        self.chain = ProviderChain()
 
         self.exporter = MarkdownExporter()
+
+        # Which provider actually served the content -- recorded on the cache
+        # entry so it's clear later where a given narrative came from.
+        self.provider = None
 
     # ----------------------------------------------------------
 
@@ -26,37 +69,23 @@ class AIEngine:
 
         prompt = self.builder.build()
 
-        try:
+        text, provider = self.chain.ask(prompt, validate=parse_response)
 
-            response = self.client.ask(prompt)
+        if text is None:
 
-        except Exception as e:
-
-            # A transient AI-service failure (rate limit, network,
-            # auth) shouldn't take down the whole deck generation --
-            # everything except the AI narrative text is independent of
-            # this call. Leave those sections blank (same fallback as
-            # an unparseable response below) rather than crashing.
-            print(f"\nAI request failed: {e}\n")
+            # Every provider failed. The deck is still worth building -- every
+            # chart, table and KPI is independent of this -- so the AI sections
+            # are left blank rather than taking the whole run down.
+            print()
+            print("AI content unavailable - continuing without it.")
+            print()
             return None
 
-        try:
+        self.provider = provider
 
-            ai_json = json.loads(response)
-
-        except json.JSONDecodeError:
-
-            print("\nAI did not return valid JSON.\n")
-            print(response)
-            return
+        ai_json = parse_response(text)
 
         self.exporter.export(ai_json)
-
-        print()
-
-        print("=" * 60)
-        print("AI CONTENT GENERATED")
-        print("=" * 60)
 
         output = Path("output")
         output.mkdir(exist_ok=True)
@@ -73,5 +102,10 @@ class AIEngine:
                 indent=4,
                 ensure_ascii=False
             )
+
+        print()
+        print("=" * 60)
+        print(f"AI CONTENT GENERATED (via {provider})")
+        print("=" * 60)
 
         return ai_json

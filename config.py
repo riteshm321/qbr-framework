@@ -54,8 +54,24 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 LOG_DIR.mkdir(exist_ok=True)
 
-# ----------------------------------
-# DEVELOPMENT OPTIONS
-# ----------------------------------
+# ==========================
+# AI Content Generation
+# ==========================
 
-USE_CACHED_AI = True
+# Providers are tried in this order until one returns usable content. A
+# provider whose API key isn't in .env -- or whose SDK isn't installed -- is
+# skipped automatically, so this list can safely name more providers than you
+# currently hold keys for. Add a key, and that provider joins the chain with
+# no code change.
+AI_PROVIDER_CHAIN = ["gemini", "groq", "openai"]
+
+# Report modes whose AI narrative is cached and reused. Custom Date Range is
+# excluded on purpose: an ad-hoc window is unlikely to be re-run with exactly
+# the same dates, so its entries would accumulate without ever being reused.
+# Add CUSTOM here if the per-run API cost becomes annoying.
+AI_CACHE_MODES = {CAMPAIGN, MONTHLY, QUARTERLY}
+
+# Bypass cache *reads* for one run (writes still happen), forcing fresh AI
+# content for the current client/campaign/period. To regenerate just one
+# entry instead, delete its file from output/ai_cache/.
+AI_FORCE_REGENERATE = False
