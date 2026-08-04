@@ -12,7 +12,7 @@ from pptx.opc.oxml import serialize_part_xml
 from pptx.oxml import parse_xml
 from pptx.oxml.ns import qn
 from pptx.text.text import _Paragraph
-from pptx.util import Pt
+from pptx.util import Emu, Pt
 
 from presentation.slide_ops import (
     add_table_column, delete_slide, duplicate_slide, set_column_widths
@@ -123,7 +123,7 @@ class PowerPointEngine:
     # Replace text
     # ---------------------------------------------------------
 
-    def replace_text(self, object_name, value, occurrence=0, paragraph_index=0, group_child_index=None, run_index=0):
+    def replace_text(self, object_name, value, occurrence=0, paragraph_index=0, group_child_index=None, run_index=None):
 
         shape = self.find_shape(object_name, occurrence=occurrence)
 
@@ -206,7 +206,11 @@ class PowerPointEngine:
 
         paragraph = tf.paragraphs[paragraph_index]
 
-        if run_index:
+        # `is not None`, not a truthiness test: run_index=0 is a real target
+        # (the figure run of a "1,032  Total Leads" pair) and must NOT fall
+        # through to the branch below, which strips every run after the first
+        # and would delete the label sitting in run 1.
+        if run_index is not None:
 
             # Some paragraphs split a fixed prefix from their body across two
             # runs -- AI_H2Recommendations numbers each line with a bold
@@ -1263,7 +1267,7 @@ class PowerPointEngine:
                 occurrence = value.get("occurrence", 0)
                 paragraph_index = value.get("paragraph_index", 0)
                 group_child_index = value.get("group_child_index")
-                run_index = value.get("run_index", 0)
+                run_index = value.get("run_index")
                 payload = value["text"]
 
             else:
@@ -1272,7 +1276,7 @@ class PowerPointEngine:
                 occurrence = 0
                 paragraph_index = 0
                 group_child_index = None
-                run_index = 0
+                run_index = None
                 payload = value
 
             shape = self.find_shape(object_name, occurrence=occurrence)
@@ -1699,6 +1703,41 @@ class PowerPointEngine:
     # looking like real data for whatever client this deck is for.
     # ---------------------------------------------------------
 
+    def clear_comparison_summary_overlap(self):
+
+        """
+        Moves the comparison slide's one-line summary clear of the chart above
+        it.
+
+        In the template AI_ComparisonSummary starts at 5756105 EMU while
+        CHART_Q1Q2Comparison runs to 5938985 -- a 0.2in overlap, so the summary
+        sits on top of the chart's category axis labels. Nudging the text box
+        down is the code-side fix for a template geometry problem; the template
+        itself is never edited.
+        """
+
+        summary = self.find_shape("AI_ComparisonSummary")
+        chart = self.find_shape("CHART_Q1Q2Comparison")
+
+        if summary is None or chart is None:
+            return
+
+        gap = Emu(45720)  # 0.05in
+
+        chart_bottom = chart.top + chart.height
+
+        if summary.top >= chart_bottom + gap:
+            return
+
+        original_top = summary.top
+
+        summary.top = chart_bottom + gap
+
+        print(
+            f"[MOVED] AI_ComparisonSummary {original_top} -> {summary.top} "
+            f"(clear of chart bottom {chart_bottom})"
+        )
+
     def apply_commentary_body_font(self):
 
         """Resizes the body paragraphs of the fixed-size commentary cards (see
@@ -1761,6 +1800,8 @@ class PowerPointEngine:
             # After the text is in, not before -- replace_text() rewrites the
             # run that carries the size.
             self.apply_commentary_body_font()
+
+            self.clear_comparison_summary_overlap()
 
         if merge_period_boxes:
 

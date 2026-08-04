@@ -219,9 +219,9 @@ class PresentationData:
 
         ppt["TITLE_ExecutiveSummary"] = "Executive Summary"
 
-        ppt["AI_ExecutiveSummary"] = self.ai.get(
-            "executive_summary",
-            ""
+        ppt["AI_ExecutiveSummary"] = self.clip(
+            self.ai.get("executive_summary", ""),
+            330
         )
 
         # -------------------------------------------------
@@ -239,6 +239,108 @@ class PresentationData:
             "campaign_description",
             ""
         )
+
+        # -------------------------------------------------
+        # EXECUTIVE SUMMARY BODY (slide 3)
+        #
+        # That box is ten paragraphs, not one: an opening narrative, then four
+        # number+label pairs each followed by a supporting line, then a closing
+        # narrative. Only paragraph 0 was ever written, so paragraphs 1-9 kept
+        # the template's own example figures -- "1,621 Total Leads (H1)",
+        # "+0.75% QoQ (799 -> 805)", "19 Trending Topics Tracked", and a
+        # closing line about healthcare organizations -- on the first content
+        # slide of every client's deck.
+        #
+        # Paragraphs 1/3/5/7 hold two runs: the bold 20pt figure and its 14pt
+        # label, so each is written by run index to keep that styling.
+        # -------------------------------------------------
+
+        def overall_metric(kpi):
+
+            row = find_row(executive, "KPI", kpi)
+
+            if row is None:
+                return None
+
+            try:
+                return int(row["Overall"])
+            except (TypeError, ValueError):
+                return None
+
+        def change_detail(metric):
+
+            """First vs last comparison period for one metric -- the same
+            basis as the status pills, so this line never disagrees with
+            them."""
+
+            if len(comparison_slots) < 2:
+                return "Single period - no earlier period to compare against"
+
+            before = comparison_slots[0]["metrics"].get(metric)
+            after = comparison_slots[-1]["metrics"].get(metric)
+
+            if not before and not after:
+                return "No activity recorded"
+
+            if not before:
+                return f"New this period ({after:,})"
+
+            pct = (after - before) / before * 100
+
+            direction = "+" if pct >= 0 else ""
+
+            return f"{direction}{pct:.1f}%  ({before:,} → {after:,})"
+
+        topic_categories = self.tables.get("Topic Categories")
+
+        category_count = 0 if topic_categories is None else len(topic_categories)
+
+        exec_rows = [
+            ("Total Leads", "Total Leads", change_detail("Total Leads")),
+            ("Unique Accounts", "Unique Accounts", change_detail("Unique Accounts")),
+            ("Assets Used", "Assets in Market", change_detail("Assets Used")),
+            (
+                "Trending Topics",
+                "Trending Topics Tracked",
+                f"Across {category_count} categories of buyer interest"
+                if category_count
+                else "No trending topic data for this campaign",
+            ),
+        ]
+
+        for i, (kpi, label, detail) in enumerate(exec_rows):
+
+            value = overall_metric(kpi)
+
+            number_paragraph = 1 + i * 2
+
+            ppt[f"AI_ExecSummary_num{i}"] = {
+                "object": "AI_ExecutiveSummary",
+                "paragraph_index": number_paragraph,
+                "run_index": 0,
+                "text": f"{self.format_count(value)}  " if value is not None else "",
+            }
+
+            ppt[f"AI_ExecSummary_lbl{i}"] = {
+                "object": "AI_ExecutiveSummary",
+                "paragraph_index": number_paragraph,
+                "run_index": 1,
+                "text": label,
+            }
+
+            ppt[f"AI_ExecSummary_det{i}"] = {
+                "object": "AI_ExecutiveSummary",
+                "paragraph_index": number_paragraph + 1,
+                "text": detail,
+            }
+
+        # Closing narrative. ExecutiveConclusion was already being generated
+        # and parsed but never placed on any slide.
+        ppt["AI_ExecSummary_closing"] = {
+            "object": "AI_ExecutiveSummary",
+            "paragraph_index": 9,
+            "text": self.clip(self.ai.get("executive_conclusion"), 210),
+        }
 
         # Campaign Snapshot (slide 4) always describes the whole
         # campaign, independent of whatever period(s) are being
@@ -383,7 +485,14 @@ class PresentationData:
             )
 
         # -------------------------------------------------
-        # OPTIMIZATION
+        # OPTIMIZATION ACTIONS (slide 9)
+        #
+        # AI_OptimizationSummary is a three-bullet action list -- three
+        # paragraphs, each an "-  action" line -- not a prose box. It was being
+        # filled by writing the summary plus newline-joined bullets into
+        # paragraph 0, which left paragraphs 1 and 2 showing the template's own
+        # actions ("...planning fresh creative for H2", "+10% QoQ shows early
+        # traction") and pushed the combined text down over the footer.
         # -------------------------------------------------
 
         optimization = self.ai.get(
@@ -393,26 +502,26 @@ class PresentationData:
 
         ppt["AI_OptimizationHeading"] = "KEY OPTIMIZATION ACTIONS"
 
-        summary = optimization.get(
-            "summary",
-            ""
-        )
+        optimization_actions = optimization.get("bullets", []) or []
 
-        bullets = optimization.get(
-            "bullets",
-            []
-        )
+        if not optimization_actions and optimization.get("summary"):
+            optimization_actions = [optimization["summary"]]
 
-        if bullets:
+        for i in range(3):
 
-            summary += "\n\n"
-
-            summary += "\n".join(
-                f"• {bullet}"
-                for bullet in bullets
+            action = (
+                self.clip(optimization_actions[i], 105)
+                if i < len(optimization_actions)
+                else ""
             )
 
-        ppt["AI_OptimizationSummary"] = summary
+            ppt[f"AI_OptimizationAction{i}"] = {
+                "object": "AI_OptimizationSummary",
+                "paragraph_index": i,
+                # The dash is part of the template's own run text rather than
+                # list formatting, so it has to be rewritten with the action.
+                "text": f"–  {action}" if action else "",
+            }
 
         # -------------------------------------------------
         # COMPARISON
@@ -420,9 +529,9 @@ class PresentationData:
 
         comparison = self.ai.get("comparison", {})
 
-        ppt["AI_ComparisonSummary"] = comparison.get(
-            "summary",
-            ""
+        ppt["AI_ComparisonSummary"] = self.clip(
+            comparison.get("summary", ""),
+            210
         )
 
         bullets = comparison.get(
@@ -430,17 +539,41 @@ class PresentationData:
             []
         )
 
-        ppt["AI_ComparisonHeadline"] = (
-            bullets[0] if len(bullets) > 0 else ""
+        ppt["AI_ComparisonHeadline"] = self.clip(
+            bullets[0] if len(bullets) > 0 else "",
+            110
         )
 
-        ppt["AI_ComparisonInsight1"] = (
-            bullets[1] if len(bullets) > 1 else ""
+        ppt["AI_ComparisonInsight1"] = self.clip(
+            bullets[1] if len(bullets) > 1 else "",
+            130
         )
 
-        ppt["AI_ComparisonInsight2"] = (
-            bullets[2] if len(bullets) > 2 else ""
+        ppt["AI_ComparisonInsight2"] = self.clip(
+            bullets[2] if len(bullets) > 2 else "",
+            130
         )
+
+        # The two figures above those insight captions were never wired, so
+        # every deck showed the template's own "+0.75%" and "+18.58%" -- the
+        # same example numbers that produced its fake "799 -> 805" leads.
+        # They pair with Insight1 and Insight2, which the prompt asks to cover
+        # Total Leads and Unique Accounts in that order.
+        for i, metric in enumerate(("Total Leads", "Unique Accounts")):
+
+            pct = None
+
+            if len(comparison_slots) >= 2:
+
+                before = comparison_slots[0]["metrics"].get(metric)
+                after = comparison_slots[-1]["metrics"].get(metric)
+
+                if before:
+                    pct = (after - before) / before * 100
+
+            ppt[f"KPI_ComparisonMetric{i + 1}"] = (
+                f"{pct:+.2f}%" if pct is not None else "n/a"
+            )
 
         # -------------------------------------------------
         # RECOMMENDATIONS (slide 25)

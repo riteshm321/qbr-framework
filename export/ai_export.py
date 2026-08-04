@@ -237,7 +237,16 @@ class AIExporter:
 
             "Period Comparison": self._period_labelled("QoQ Comparison"),
 
-            "Optimization Insights": self._period_labelled("Optimization Insights")
+            "Optimization Insights": self._period_labelled("Optimization Insights"),
+
+            # First vs last period per metric, with the Status wording the
+            # deck's own status pills display. The "Optimization Insights"
+            # table above is built from the fixed 2-slot comparison, which for
+            # Full Campaign compares the period against itself and so reports
+            # zero change for everything -- the AI read that and wrote
+            # "metrics held flat" onto a slide whose pills said "Decline" and
+            # "Strong Growth". This is the table those pills come from.
+            "Metric Status": self._records("Comparison Overview")
 
         }
 

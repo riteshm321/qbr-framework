@@ -1148,38 +1148,38 @@ class LeadGenAnalyzer:
     _RECOMMENDATION_TEMPLATES = {
 
         "Total Leads": {
-            "Strong Growth": "Lead volume is up {pct}% -- scale the channels and assets driving it.",
-            "Stable Growth": "Lead volume grew {pct}% -- continue the current optimization cadence.",
-            "No Change": "Lead volume held flat -- monitor next period before adjusting spend.",
-            "Decline": "Lead volume dropped {abs_pct}% -- investigate the cause and reallocate budget.",
+            "Strong Growth": "Lead volume is up {pct}% – scale the channels and assets driving it.",
+            "Stable Growth": "Lead volume grew {pct}% – continue the current optimization cadence.",
+            "No Change": "Lead volume held flat – monitor next period before adjusting spend.",
+            "Decline": "Lead volume dropped {abs_pct}% – investigate the cause and reallocate budget.",
         },
 
         "Unique Accounts": {
-            "Strong Growth": "Account reach is up {pct}% -- scale the current account-based targeting strategy.",
-            "Stable Growth": "Account reach grew {pct}% -- continue expanding the target account list.",
-            "No Change": "Account reach held flat -- revisit targeting criteria to widen the net.",
-            "Decline": "Account reach dropped {abs_pct}% -- review the targeting list for coverage gaps.",
+            "Strong Growth": "Account reach is up {pct}% – scale the current account-based targeting strategy.",
+            "Stable Growth": "Account reach grew {pct}% – continue expanding the target account list.",
+            "No Change": "Account reach held flat – revisit targeting criteria to widen the net.",
+            "Decline": "Account reach dropped {abs_pct}% – review the targeting list for coverage gaps.",
         },
 
         "Assets Used": {
-            "Strong Growth": "Asset variety is up {pct}% -- keep rotating fresh content into the mix.",
-            "Stable Growth": "Asset variety grew {pct}% -- continue testing new formats alongside top performers.",
-            "No Change": "Asset variety held flat -- test an additional asset next period to keep content fresh.",
-            "Decline": "Asset variety dropped {abs_pct}% -- refresh the content mix to re-engage accounts.",
+            "Strong Growth": "Asset variety is up {pct}% – keep rotating fresh content into the mix.",
+            "Stable Growth": "Asset variety grew {pct}% – continue testing new formats alongside top performers.",
+            "No Change": "Asset variety held flat – test an additional asset next period to keep content fresh.",
+            "Decline": "Asset variety dropped {abs_pct}% – refresh the content mix to re-engage accounts.",
         },
 
         "Job Titles": {
-            "Strong Growth": "Persona reach is up {pct}% -- keep broadening title targeting.",
-            "Stable Growth": "Persona reach grew {pct}% -- continue broadening persona/title reach.",
-            "No Change": "Persona reach held flat -- expand messaging to reach adjacent titles.",
-            "Decline": "Persona reach dropped {abs_pct}% -- revisit persona targeting to widen title coverage.",
+            "Strong Growth": "Persona reach is up {pct}% – keep broadening title targeting.",
+            "Stable Growth": "Persona reach grew {pct}% – continue broadening persona/title reach.",
+            "No Change": "Persona reach held flat – expand messaging to reach adjacent titles.",
+            "Decline": "Persona reach dropped {abs_pct}% – revisit persona targeting to widen title coverage.",
         },
 
         "Countries": {
-            "Strong Growth": "Geographic reach is up {pct}% -- scale into the strongest-performing regions.",
-            "Stable Growth": "Geographic reach grew {pct}% -- continue evaluating expansion into new regions.",
-            "No Change": "Geographic footprint held flat -- evaluate geographic expansion opportunities.",
-            "Decline": "Geographic reach dropped {abs_pct}% -- review regional targeting for gaps.",
+            "Strong Growth": "Geographic reach is up {pct}% – scale into the strongest-performing regions.",
+            "Stable Growth": "Geographic reach grew {pct}% – continue evaluating expansion into new regions.",
+            "No Change": "Geographic footprint held flat – evaluate geographic expansion opportunities.",
+            "Decline": "Geographic reach dropped {abs_pct}% – review regional targeting for gaps.",
         },
     }
 

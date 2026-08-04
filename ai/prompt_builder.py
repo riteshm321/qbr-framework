@@ -62,6 +62,10 @@ IMPORTANT RULES
    not call a decline "growth" or "momentum". Where a metric declined, say so
    plainly and treat it as an optimization opportunity.
 
+9. FORMATTING. Write counts of a thousand or more with a thousands separator
+   ("1,032", not "1032"), so the narrative matches the figures printed on the
+   slides beside it.
+
 ------------------------------------------------------------
 
 Return ONLY valid JSON.
@@ -198,7 +202,26 @@ the limit.
 - TopAccounts: read "Top Engaged Accounts" and "Top Intent Accounts".
   footer max 22 words.
 
-- OptimizationHighlights: read "Optimization Insights". footer max 27 words.
+- Optimization and OptimizationHighlights: read "Metric Status". That table
+  carries the exact per-metric direction and Status wording shown on the status
+  pills next to this text, so your description must agree with it -- do not call
+  a metric flat if its Status says Decline or Strong Growth. Ignore any
+  all-zero change figures in "Optimization Insights": for a single-period
+  report that table compares the period against itself, and its zeroes mean
+  "not applicable", not "no change".
+  Optimization: EXACTLY 3 bullets, each a single action, max 16 words each --
+  these are the only three lines the slide has room for. summary max 26 words.
+  OptimizationHighlights: footer max 27 words.
+
+- ExecutiveConclusion.summary: the closing line of the executive summary --
+  what the period means overall and where to focus next. Max 30 words.
+
+- Comparison: summary max 30 words. Exactly 3 bullets, each max 18 words, in
+  this order and no other: bullet 1 is the overall headline; bullet 2 MUST be
+  about Total Leads; bullet 3 MUST be about Unique Accounts. Bullets 2 and 3 sit
+  directly beneath the Total Leads and Unique Accounts percentage change
+  figures, so covering a different metric there contradicts the number printed
+  above it.
 
 - KeyLearnings: exactly 5 entries. "title" max 5 words (a short phrase, no
   trailing full stop). "detail" max 19 words, one sentence citing the
