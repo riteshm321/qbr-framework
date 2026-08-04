@@ -172,15 +172,25 @@ Each section below appears in a FIXED-SIZE text box on a specific slide, beside
 a specific chart or table. Read the data named for it -- do not describe a
 different dataset.
 
-WORD LIMITS ARE HARD LIMITS, NOT TARGETS. These boxes cannot grow. Text over
-the limit is cut off mid-sentence on the client's slide, so a complete short
-sentence is always better than a detailed one that gets truncated. Count the
-words before you answer, and cut adjectives and preamble rather than exceeding
-the limit.
+EVERY bullet, heading, footer and detail must be a COMPLETE SENTENCE that says
+what the data means. Never answer with a label-and-value pair, and never simply
+restate a number that is already printed on the slide -- the figure is beside
+the text, so repeating it adds nothing and reads as an unfinished placeholder.
+
+  BAD:  "Targeted accounts: 1,507"
+  BAD:  "Q2 leads: 384"
+  BAD:  "Lead Volume - dropped 41% to 1,032 leads"
+  GOOD: "Only 21% of reached accounts converted, the clearest gap to close."
+  GOOD: "Leads peaked in Q2 then fell for two straight quarters."
+  GOOD: "Lead volume fell while account reach widened, so intent is outpacing conversion."
+
+WORD COUNTS ARE RANGES: land inside the stated range. Going over gets the text
+cut off mid-sentence on the client's slide; coming in far under leaves the box
+looking empty. A range of "10-14 words" means write 10 to 14 words, not 3.
 
 - PeriodAnalysis: exactly one entry per label listed under
   "Periods Needing Individual Commentary", in that same order, and each
-  "period" value must be that exact label. Each "summary" max 30 words.
+  "period" value must be that exact label. Each "summary" 22-30 words.
 
 - TrendAnalysis: read "Trend Projection". Rows where "Is Forecast" is true are
   projections, not actuals -- never present them as results already achieved.
@@ -188,20 +198,20 @@ the limit.
   Reporting Period labels: this table numbers its points sequentially and its
   values are the chart's own axis labels, so using any other name would
   describe the chart beside it with labels it does not show.
-  heading max 14 words; exactly 3 bullets, MAX 14 WORDS EACH.
+  heading 9-14 words; exactly 3 bullets, 10-14 WORDS EACH.
 
 - ContentPerformance: read "Asset Performance" and "Asset Contribution".
-  heading max 11 words; exactly 3 bullets, MAX 16 WORDS EACH.
+  heading 8-11 words; exactly 3 bullets, 11-16 WORDS EACH.
 
 - AudienceInterest: read "Trending Topics" and "Topic Categories".
-  heading max 12 words; summary max 26 words.
+  heading 8-12 words; summary 18-26 words.
 
 - Engagement: read "Account Funnel" and "Account Conversion" -- the
   Targeted / Reached / Engaged account funnel. This is NOT about impressions,
-  clicks or CTR. Exactly 3 bullets, MAX 14 WORDS EACH.
+  clicks or CTR. Exactly 3 bullets, 10-14 WORDS EACH.
 
 - TopAccounts: read "Top Engaged Accounts" and "Top Intent Accounts".
-  footer max 22 words.
+  footer 16-22 words.
 
 - Optimization and OptimizationHighlights: read "Metric Status". That table
   carries the exact per-metric direction and Status wording shown on the status
@@ -210,26 +220,26 @@ the limit.
   all-zero change figures in "Optimization Insights": for a single-period
   report that table compares the period against itself, and its zeroes mean
   "not applicable", not "no change".
-  Optimization: EXACTLY 3 bullets, each a single action, max 16 words each --
-  these are the only three lines the slide has room for. summary max 26 words.
-  OptimizationHighlights: footer max 27 words.
+  Optimization: EXACTLY 3 bullets, each a single action, 11-16 words each --
+  these are the only three lines the slide has room for. summary 18-26 words.
+  OptimizationHighlights: footer 19-27 words.
 
 - ExecutiveConclusion.summary: the closing line of the executive summary --
-  what the period means overall and where to focus next. Max 30 words.
+  what the period means overall and where to focus next. 22-30 words.
 
-- Comparison: summary max 30 words. Exactly 3 bullets, each max 18 words, in
+- Comparison: summary 22-30 words. Exactly 3 bullets, each 12-18 words, in
   this order and no other: bullet 1 is the overall headline; bullet 2 MUST be
   about Total Leads; bullet 3 MUST be about Unique Accounts. Bullets 2 and 3 sit
   directly beneath the Total Leads and Unique Accounts percentage change
   figures, so covering a different metric there contradicts the number printed
   above it.
 
-- KeyLearnings: exactly 5 entries. "title" max 5 words (a short phrase, no
-  trailing full stop). "detail" max 19 words, one sentence citing the
-  supporting figures.
+- KeyLearnings: exactly 5 entries. "title" 3-5 words (a short phrase, no
+  trailing full stop). "detail" 13-19 words, one sentence that explains what the
+  figures mean rather than listing them.
 
 - Recommendations.actions: exactly 5 forward-looking actions, one sentence and
-  max 20 words each.
+  14-20 words each.
 
 - Partnership.summary: read "Value Add Metrics" and "Top Intent Accounts".
   THREE COMPLETE SENTENCES, 45-60 words in total. This one is a wide full-width
