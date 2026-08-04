@@ -337,13 +337,7 @@ class PowerPointEngine:
 
             for r in range(1, len(table.rows)):
                 for c in range(len(table.columns)):
-
-                    tf = table.cell(r, c).text_frame
-
-                    if tf.paragraphs and tf.paragraphs[0].runs:
-                        tf.paragraphs[0].runs[0].text = ""
-                    else:
-                        tf.text = ""
+                    self._write_cell(table.cell(r, c), "")
 
             print(f"[CLEARED TABLE] {object_name} (no data)")
 
@@ -384,22 +378,45 @@ class PowerPointEngine:
                     # through untouched here.
                     value = f"{round(value):,}"
 
-                cell = table.cell(r + 1, c)
+                self._write_cell(table.cell(r + 1, c), value)
 
-                tf = cell.text_frame
+        # A client's data can legitimately fill fewer rows than the
+        # template's table has (e.g. only 5 accounts showed intent, but
+        # the table was drawn with 8 data rows). The loop above only
+        # touches the rows it had data for, which left the template's own
+        # example rows -- real-looking company names and scores from
+        # whatever deck this template was built from -- sitting
+        # underneath the genuine data, indistinguishable from it. Blank
+        # every row the data didn't reach.
+        leftover = range(max_rows + 1, len(table.rows))
 
-                # Preserve formatting
-                if tf.paragraphs and tf.paragraphs[0].runs:
+        for r in leftover:
+            for c in range(len(table.columns)):
+                self._write_cell(table.cell(r, c), "")
 
-                    tf.paragraphs[0].runs[0].text = str(value)
-
-                else:
-
-                    tf.text = str(value)
-
-        print(f"[UPDATED TABLE] {object_name}")
+        if leftover:
+            print(
+                f"[UPDATED TABLE] {object_name} "
+                f"({max_rows} rows, {len(leftover)} unused row(s) cleared)"
+            )
+        else:
+            print(f"[UPDATED TABLE] {object_name}")
 
         return True
+
+    @staticmethod
+    def _write_cell(cell, value):
+
+        """Writes a cell's text through its first existing run where
+        there is one, so the template's own font/size/colour for that
+        cell survives (assigning to text_frame.text drops it)."""
+
+        tf = cell.text_frame
+
+        if tf.paragraphs and tf.paragraphs[0].runs:
+            tf.paragraphs[0].runs[0].text = str(value)
+        else:
+            tf.text = str(value)
     
     def replace_chart(self, object_name, dataframe):
 
@@ -1291,9 +1308,12 @@ class PowerPointEngine:
             recolor(slide.shapes)
 
     # ---------------------------------------------------------
-    # The template's Top Intent Companies table only has 2 columns
-    # (Company, Score) -- grow it to 3 (Company, Topic, Score) so the
-    # real "what topic are they surging on" detail has somewhere to go.
+    # The template's Top Intent table only has 2 columns
+    # (Company, Score) -- relabel the first header to "Account" (the
+    # deck talks about accounts throughout, and this is the same entity
+    # as the Top Engaged Accounts table beside it) and grow it to 3
+    # (Account, Topic, Score) so the real "what topic are they surging
+    # on" detail has somewhere to go.
     # ---------------------------------------------------------
 
     def _prepare_intent_companies_table(self):
@@ -1305,6 +1325,15 @@ class PowerPointEngine:
             return
 
         table = table_shape.table
+
+        # Done before the column-count check below so the relabel still
+        # happens even when the table already has its 3rd column.
+        header_tf = table.rows[0].cells[0].text_frame
+
+        if header_tf.paragraphs and header_tf.paragraphs[0].runs:
+            header_tf.paragraphs[0].runs[0].text = "Account"
+        else:
+            header_tf.text = "Account"
 
         if len(table.columns) >= 3:
             return
@@ -1320,10 +1349,10 @@ class PowerPointEngine:
 
         total_width = sum(original_widths)
         score_width = original_widths[-1]
-        company_width = round(total_width * 0.40)
-        topic_width = total_width - company_width - score_width
+        account_width = round(total_width * 0.40)
+        topic_width = total_width - account_width - score_width
 
-        set_column_widths(table, [company_width, topic_width, score_width])
+        set_column_widths(table, [account_width, topic_width, score_width])
 
         print("[RESIZED TABLE] Table_TopIntentCompanies -> added Topic column")
 

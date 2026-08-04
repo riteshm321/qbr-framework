@@ -602,6 +602,13 @@ class PresentationData:
             "Top Intent Companies"
         )
 
+        # The template's static heading reads "TOP INTENT COMPANIES (BY
+        # ML SCORE)" -- these are accounts (the same entity as the Top
+        # Engaged Accounts table beside it), and the "(BY ML SCORE)"
+        # qualifier is already obvious from the table's own Score
+        # column. Set from here rather than editing the template.
+        ppt["AI_TopIntentHeading"] = "TOP INTENT ACCOUNTS"
+
         # Reuse `optimization_table` as already resolved above (which
         # switches to the first-vs-last Comparison Overview whenever
         # comparison_slots > 2) so the Recommendation text here always

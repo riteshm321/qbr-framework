@@ -1052,17 +1052,24 @@ class LeadGenAnalyzer:
 
     def build_top_intent_companies(self):
 
-        """Top companies by ML intent score, each shown with the single
+        """Top accounts by ML intent score, each shown with the single
         topic they're most engaged with (their highest-scoring topic,
         i.e. what they're "surging on") rather than an average across
-        every topic they've touched -- a company's real story is which
-        specific topic is driving their score, not a blended number."""
+        every topic they've touched -- an account's real story is which
+        specific topic is driving their score, not a blended number.
+
+        The source report calls this column "Company" (that name is also
+        what core/detector.py keys on to recognise the report, so it
+        stays untouched on the raw dataframe), but the deck presents
+        these as accounts -- so the output column is renamed to
+        "Account" here, keeping the PPT table, Excel export and AI
+        export all consistent with that wording."""
 
         df = self.trending_topics
 
         if df.empty:
             self.tables["Top Intent Companies"] = pd.DataFrame(
-                columns=["Company", "Topic", "MLScore"]
+                columns=["Account", "Topic", "MLScore"]
             )
             return
 
@@ -1075,7 +1082,10 @@ class LeadGenAnalyzer:
                 top_topic_idx,
                 ["Company", "Topic", "ML Insights Score"]
             ]
-            .rename(columns={"ML Insights Score": "MLScore"})
+            .rename(columns={
+                "Company": "Account",
+                "ML Insights Score": "MLScore",
+            })
             .sort_values("MLScore", ascending=False)
         )
 
