@@ -267,7 +267,7 @@ constructed in `main.py` after `analysis` exists, so this needs no reordering.
 - `engine/presentation_data.py` — wire the 13 AI boxes and 5 deterministic boxes;
   redirect the 6 salvageable dead keys; remove `AI_RecommendationsSummary`
 - `presentation/ppt_engine.py` — add `run_index` to `replace_text()`
-- `campaign_types/leadgen.py` — expose the counts the 6 deterministic boxes need,
+- `campaign_types/leadgen.py` — expose the counts the 5 deterministic boxes need,
   if not already present in `period_meta` / `results`
 
 ## Phase 1 verification
