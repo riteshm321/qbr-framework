@@ -26,6 +26,19 @@ FONT_SIZE_OVERRIDES = {
     "AI_ExecutiveSummary": Pt(12),
 }
 
+# Body font for the fixed-size "label + 3 lines" commentary cards. The
+# template sized these for its own example sentences; real AI commentary
+# citing this client's figures runs longer, and these cards are narrow enough
+# (~22 characters a line) that 14pt text wraps to 4 lines per bullet and pushes
+# the last one out through the bottom of the card. Dropping the body a couple
+# of points buys a line per bullet, which is what keeps full sentences intact
+# instead of truncating them mid-clause.
+COMMENTARY_BODY_FONT = {
+    "AI_TrendAnalysisSummary": Pt(12),
+    "AI_EngagementSummary": Pt(12),
+    "AI_ContentPerformanceSummary": Pt(12),
+}
+
 # Explicit per-series colors for the comparison chart. The template's own
 # Q1/Q2 colors lead the list so the 2-period case looks unchanged;
 # replace_data() otherwise reuses the last series' exact color for every
@@ -110,7 +123,7 @@ class PowerPointEngine:
     # Replace text
     # ---------------------------------------------------------
 
-    def replace_text(self, object_name, value, occurrence=0, paragraph_index=0, group_child_index=None):
+    def replace_text(self, object_name, value, occurrence=0, paragraph_index=0, group_child_index=None, run_index=0):
 
         shape = self.find_shape(object_name, occurrence=occurrence)
 
@@ -193,9 +206,29 @@ class PowerPointEngine:
 
         paragraph = tf.paragraphs[paragraph_index]
 
-        # Preserve formatting by editing the first run
-        if paragraph.runs:
+        if run_index:
 
+            # Some paragraphs split a fixed prefix from their body across two
+            # runs -- AI_H2Recommendations numbers each line with a bold
+            # "01   " run followed by the text run. Writing run 0 there would
+            # wipe the numbering, so target the body run and leave the rest
+            # (and the run count) alone.
+            if run_index < len(paragraph.runs):
+
+                paragraph.runs[run_index].text = str(value)
+
+            else:
+
+                print(
+                    f"[NO SUCH RUN] {object_name}"
+                    f"[p{paragraph_index}][r{run_index}]"
+                )
+
+                return False
+
+        elif paragraph.runs:
+
+            # Preserve formatting by editing the first run
             paragraph.runs[0].text = str(value)
 
             # Remove any extra runs
@@ -1230,6 +1263,7 @@ class PowerPointEngine:
                 occurrence = value.get("occurrence", 0)
                 paragraph_index = value.get("paragraph_index", 0)
                 group_child_index = value.get("group_child_index")
+                run_index = value.get("run_index", 0)
                 payload = value["text"]
 
             else:
@@ -1238,6 +1272,7 @@ class PowerPointEngine:
                 occurrence = 0
                 paragraph_index = 0
                 group_child_index = None
+                run_index = 0
                 payload = value
 
             shape = self.find_shape(object_name, occurrence=occurrence)
@@ -1274,7 +1309,8 @@ class PowerPointEngine:
                     payload,
                     occurrence=occurrence,
                     paragraph_index=paragraph_index,
-                    group_child_index=group_child_index
+                    group_child_index=group_child_index,
+                    run_index=run_index
                 )
 
     # ---------------------------------------------------------
@@ -1663,6 +1699,25 @@ class PowerPointEngine:
     # looking like real data for whatever client this deck is for.
     # ---------------------------------------------------------
 
+    def apply_commentary_body_font(self):
+
+        """Resizes the body paragraphs of the fixed-size commentary cards (see
+        COMMENTARY_BODY_FONT). Paragraph 0 is each card's own bold label and is
+        left at the template's size."""
+
+        for object_name, size in COMMENTARY_BODY_FONT.items():
+
+            shape = self.find_shape(object_name)
+
+            if shape is None or not shape.has_text_frame:
+                continue
+
+            for paragraph in shape.text_frame.paragraphs[1:]:
+                for run in paragraph.runs:
+                    run.font.size = size
+
+            print(f"[RESIZED BODY] {object_name} -> {size.pt:g}pt")
+
     def _delete_slides_by_shape(self, shape_names):
 
         for name in shape_names:
@@ -1702,6 +1757,10 @@ class PowerPointEngine:
         if replacements:
 
             self.replace_objects(replacements)
+
+            # After the text is in, not before -- replace_text() rewrites the
+            # run that carries the size.
+            self.apply_commentary_body_font()
 
         if merge_period_boxes:
 

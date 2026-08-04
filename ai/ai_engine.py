@@ -60,14 +60,18 @@ class AIEngine:
 
     # ----------------------------------------------------------
 
-    def run(self):
+    def run(self, prompt=None):
 
         print()
         print("=" * 60)
         print("GENERATING AI CONTENT...")
         print("=" * 60)
 
-        prompt = self.builder.build()
+        # The caller normally passes the prompt it already built for the cache
+        # fingerprint, so the content stored against a key was demonstrably
+        # produced by that exact prompt.
+        if prompt is None:
+            prompt = self.builder.build()
 
         text, provider = self.chain.ask(prompt, validate=parse_response)
 

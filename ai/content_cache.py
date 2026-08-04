@@ -23,8 +23,6 @@ import config
 
 CACHE_DIR = Path("output") / "ai_cache"
 
-PACKAGE_PATH = Path("output") / "qbr_package.json"
-
 
 # ------------------------------------------------------------
 # Identity
@@ -49,46 +47,35 @@ def _campaign_id(program_name):
     return (program_name or "").strip()
 
 
-def _data_fingerprint():
+def _prompt_fingerprint(prompt):
 
     """
-    SHA-256 of the analytics payload that gets embedded in the prompt.
+    SHA-256 of the exact prompt that would be sent.
 
-    Stable for a given dataset: export/ai_export.py deliberately writes no
-    generation timestamp into that file, because a value changing every run
+    Fingerprinting the whole prompt -- not just the analytics payload it
+    embeds -- means the cache also notices changes to the instructions:
+    the response schema, the section length limits, the rules about which
+    dataset each section must read. Hashing only the data left every one of
+    those invisible, so editing the prompt silently kept serving content
+    written under the previous version of it.
+
+    Stable for a given dataset because export/ai_export.py deliberately writes
+    no generation timestamp into the payload -- a value changing every run
     would change this hash every run and stop the cache ever hitting.
-
-    Returns None when the payload hasn't been written yet, which the caller
-    treats as "can't identify this run, so don't cache it".
     """
 
-    if not PACKAGE_PATH.exists():
+    if not prompt:
         return None
 
-    try:
-        with open(PACKAGE_PATH, encoding="utf-8") as f:
-            package = json.load(f)
-
-    except (OSError, json.JSONDecodeError) as error:
-        print(f"  [AI CACHE] could not read {PACKAGE_PATH} ({type(error).__name__})")
-        return None
-
-    canonical = json.dumps(
-        package,
-        sort_keys=True,
-        ensure_ascii=False,
-        default=str
-    )
-
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
 
 
-def build_identity(period_meta=None):
+def build_identity(period_meta=None, prompt=None):
 
     """Everything that should make AI content count as "different". Returns
-    None when the run can't be identified (no analytics payload yet)."""
+    None when the run can't be identified (no prompt to fingerprint)."""
 
-    fingerprint = _data_fingerprint()
+    fingerprint = _prompt_fingerprint(prompt)
 
     if fingerprint is None:
         return None
@@ -111,7 +98,8 @@ def build_identity(period_meta=None):
 
         "periods": [slot.get("label", "") for slot in slots],
 
-        "data_fingerprint": fingerprint,
+        # Covers both the campaign data and the prompt instructions.
+        "prompt_fingerprint": fingerprint,
 
     }
 

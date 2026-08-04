@@ -31,15 +31,20 @@ class StoryBuilder:
         disagree with the charts beside it.
         """
 
-        identity = content_cache.build_identity(self.period_meta)
+        # Built once and used for both the cache fingerprint and the API call,
+        # so the key always describes the exact prompt that produced the
+        # content it is stored against.
+        prompt = self.ai.builder.build()
+
+        identity = content_cache.build_identity(self.period_meta, prompt)
 
         if identity is None:
 
-            # No analytics payload to fingerprint, so this run can't be
-            # identified. Generate, but don't record it under a key that might
-            # not describe it.
+            # Nothing to fingerprint, so this run can't be identified.
+            # Generate, but don't record it under a key that might not
+            # describe it.
             print("\n[AI CACHE] run not identifiable - generating without caching\n")
-            return self.ai.run()
+            return self.ai.run(prompt=prompt)
 
         if not content_cache.is_cacheable():
 
@@ -47,7 +52,7 @@ class StoryBuilder:
                 f"\n[AI CACHE] {config.REPORT_MODE} mode is not cached "
                 f"(see config.AI_CACHE_MODES) - generating fresh\n"
             )
-            return self.ai.run()
+            return self.ai.run(prompt=prompt)
 
         print()
 
@@ -63,7 +68,7 @@ class StoryBuilder:
 
             print(f"  [AI CACHE] MISS {content_cache.describe(identity)}")
 
-        ai_json = self.ai.run()
+        ai_json = self.ai.run(prompt=prompt)
 
         if ai_json is not None:
             content_cache.store(identity, ai_json, self.ai.provider)
@@ -93,19 +98,24 @@ class StoryBuilder:
             ""
         )
 
-        q1_analysis = ai_json.get("Q1Analysis", {})
+        # Per-period commentary, keyed by the period's own label ("Q2 2025",
+        # "May", "Full Campaign"). Replaces the old fixed Q1Analysis /
+        # Q2Analysis pair, which could only ever fill the first two period
+        # slides -- every additional period's insight box was left showing
+        # the template's example text.
+        period_analysis = {}
 
-        self.presentation.ai["q1_analysis"] = q1_analysis.get(
-            "summary",
-            ""
-        )
+        for entry in ai_json.get("PeriodAnalysis", []) or []:
 
-        q2_analysis = ai_json.get("Q2Analysis", {})
+            if not isinstance(entry, dict):
+                continue
 
-        self.presentation.ai["q2_analysis"] = q2_analysis.get(
-            "summary",
-            ""
-        )
+            label = (entry.get("period") or "").strip()
+
+            if label:
+                period_analysis[label] = entry.get("summary", "")
+
+        self.presentation.ai["period_analysis"] = period_analysis
 
         self.presentation.ai["comparison"] = ai_json.get(
             "Comparison",
@@ -129,6 +139,28 @@ class StoryBuilder:
             ""
         )
 
+        self.presentation.ai["value_add_heading"] = value_add.get(
+            "heading",
+            ""
+        )
+
+        # Sections backing the slide commentary boxes (trend, content, topics,
+        # funnel, intent, optimization, learnings, partnership).
+        for key, section in (
+            ("trend_analysis", "TrendAnalysis"),
+            ("content_performance", "ContentPerformance"),
+            ("audience_interest", "AudienceInterest"),
+            ("engagement", "Engagement"),
+            ("top_accounts", "TopAccounts"),
+            ("optimization_highlights", "OptimizationHighlights"),
+            ("key_learnings", "KeyLearnings"),
+            ("partnership", "Partnership"),
+        ):
+
+            value = ai_json.get(section, {})
+
+            self.presentation.ai[key] = value if isinstance(value, dict) else {}
+
         executive_conclusion = ai_json.get(
             "ExecutiveConclusion",
             {}
@@ -139,9 +171,14 @@ class StoryBuilder:
             ""
         )
 
-        self.presentation.ai["speaker_notes"] = ai_json.get(
-            "Speaker_Notes",
-            ""
-        )
+        # The schema asks for "SpeakerNotes": {"notes": "..."}, but this read
+        # "Speaker_Notes" and expected a bare string -- so speaker notes were
+        # always empty regardless of what the model returned.
+        speaker_notes = ai_json.get("SpeakerNotes", {})
+
+        if isinstance(speaker_notes, dict):
+            speaker_notes = speaker_notes.get("notes", "")
+
+        self.presentation.ai["speaker_notes"] = speaker_notes
 
         return self.presentation

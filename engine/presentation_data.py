@@ -26,21 +26,19 @@ class PresentationData:
 
         self.results = {}
 
+        # Defaults for every AI-backed field, used as-is when the AI call
+        # never ran (all providers out of quota, no API key, etc). Sections
+        # read back with .get() must default to {} rather than "" -- a plain
+        # string has no .get() and would crash the whole fill pass.
         self.ai = {
 
             "executive_summary": "",
 
             "campaign_overview": "",
 
-            "q1_analysis": "",
+            # label -> commentary, one per period that has a detail slide
+            "period_analysis": {},
 
-            "q2_analysis": "",
-
-            # These three are read back as dicts (.get("summary"),
-            # .get("bullets"/"actions")) in to_ppt_dictionary() -- {}
-            # rather than "" so that default still supports .get() when
-            # the AI call never ran (e.g. a Gemini failure/rate limit),
-            # instead of crashing on a plain string with no .get().
             "comparison": {},
 
             "recommendations": {},
@@ -48,6 +46,24 @@ class PresentationData:
             "optimization": {},
 
             "value_add": "",
+
+            "value_add_heading": "",
+
+            "trend_analysis": {},
+
+            "content_performance": {},
+
+            "audience_interest": {},
+
+            "engagement": {},
+
+            "top_accounts": {},
+
+            "optimization_highlights": {},
+
+            "key_learnings": {},
+
+            "partnership": {},
 
             "executive_conclusion": "",
 
@@ -126,6 +142,30 @@ class PresentationData:
         count -- the card's label text, not the number itself."""
 
         return "Country" if count == 1 else "Countries"
+
+    @staticmethod
+    def clip(text, limit):
+
+        """
+        Hard cap on AI text that has to fit a fixed-size template box.
+
+        The prompt states these limits, but nothing guarantees a model honours
+        them, and an over-long line doesn't just look untidy -- PowerPoint
+        pushes it past the bottom of its box, over the footer and off the
+        slide. Cutting at a word boundary here means the layout holds whatever
+        comes back.
+        """
+
+        text = str(text or "").strip()
+
+        if len(text) <= limit:
+            return text
+
+        # Strip trailing punctuation before adding the ellipsis, or a cut that
+        # lands just after a sentence end reads as four dots ("...opportunities....").
+        trimmed = text[:limit].rsplit(" ", 1)[0].rstrip(" .,;:-–—")
+
+        return f"{trimmed}..."
 
     def to_ppt_dictionary(self):
 
@@ -219,10 +259,35 @@ class PresentationData:
                 periods.get("comparison_label", "Comparative Analysis"),
                 "Content, Audience & Intent Insights",
                 "Key Learnings & Optimization Highlights",
-                "Momentum & 2026 Outlook",
+                "Momentum & Forward Outlook",
                 "Value-Add Lead Impact Summary",
             ]
         )
+
+        # -------------------------------------------------
+        # SLIDE TITLES the template hardcodes to a period
+        #
+        # These three read "H1 2026" / "Building H1 Momentum" in the template
+        # and were never wired, so every deck claimed to cover H1 2026 no
+        # matter which period was selected -- and "momentum" asserts growth,
+        # which misreads a declining campaign. The period is already stated on
+        # the cover and Campaign Snapshot, so these titles simply drop it
+        # rather than restating it in a form that can go wrong.
+        # -------------------------------------------------
+
+        ppt["TITLE_TrendAnalysis"] = "Trend Analysis & Forward Projection"
+
+        ppt["TITLE_ContentPerformance"] = "Content & Asset Performance"
+
+        ppt["TITLE_H2Momentum"] = "Momentum & Forward Outlook"
+
+        # "Weeks in Market (H1)" -- the number is wired below, but its caption
+        # child carried the same hardcoded half-year.
+        ppt["CARD_WeeksInMarketLabel"] = {
+            "object": "CARD_WeeksInMarket",
+            "group_child_index": 2,
+            "text": "Weeks in Market",
+        }
 
         # -------------------------------------------------
         # PER-PERIOD DETAIL SLIDES (divider + performance detail,
@@ -300,18 +365,22 @@ class PresentationData:
         )
 
         # -------------------------------------------------
-        # Q1 / Q2 INSIGHTS
+        # PER-PERIOD INSIGHTS
+        #
+        # One per period detail slide, looked up by that period's own label.
+        # Previously only AI_Q1_Insight and AI_Q2_Insight were set, so on a
+        # Month-over-Month run the third month onward (AI_P3_Insight, ...)
+        # kept the template's example insight text.
         # -------------------------------------------------
 
-        ppt["AI_Q1_Insight"] = self.ai.get(
-            "q1_analysis",
-            ""
-        )
+        period_analysis = self.ai.get("period_analysis", {}) or {}
 
-        ppt["AI_Q2_Insight"] = self.ai.get(
-            "q2_analysis",
-            ""
-        )
+        for slot in periods.get("slots", []):
+
+            ppt[f"AI_{slot['slot']}_Insight"] = self.clip(
+                period_analysis.get(slot["label"], ""),
+                220
+            )
 
         # -------------------------------------------------
         # OPTIMIZATION
@@ -374,7 +443,20 @@ class PresentationData:
         )
 
         # -------------------------------------------------
-        # RECOMMENDATIONS
+        # RECOMMENDATIONS (slide 25)
+        #
+        # The template holds all five in ONE box, AI_H2Recommendations, as
+        # paragraphs 1-5 (paragraph 0 is the section title). Each of those
+        # paragraphs splits into two runs: a bold "01   " number prefix and
+        # the text -- so these target run 1, or the numbering would be
+        # overwritten.
+        #
+        # This previously wrote to AI_Recommendation1..5 and
+        # AI_RecommendationsSummary, none of which exist in the template, so
+        # every recommendation was generated and then silently discarded
+        # while the slide showed the template's own example actions.
+        # AI_RecommendationsSummary has no counterpart box and its content
+        # duplicates the five actions, so it is dropped rather than rehomed.
         # -------------------------------------------------
 
         recommendations = self.ai.get(
@@ -382,32 +464,54 @@ class PresentationData:
             {}
         )
 
-        ppt["AI_RecommendationsSummary"] = recommendations.get(
-            "summary",
-            ""
-        )
-
         actions = recommendations.get(
             "actions",
             []
         )
 
+        # Paragraph 0 is the box's own heading. The template hardcodes it to
+        # "Momentum & 2026 Outlook", and it now sits directly beside the
+        # slide's panel title -- so make it describe the list instead of
+        # repeating the title with a year baked in.
+        ppt["AI_H2RecommendationsHeading"] = {
+            "object": "AI_H2Recommendations",
+            "paragraph_index": 0,
+            "text": "Recommended Next Steps",
+        }
+
         for i in range(5):
 
-            ppt[f"AI_Recommendation{i+1}"] = (
-                actions[i]
-                if i < len(actions)
-                else ""
-            )
+            ppt[f"AI_H2Recommendation{i + 1}"] = {
+                "object": "AI_H2Recommendations",
+                "paragraph_index": i + 1,
+                "run_index": 1,
+                "text": self.clip(actions[i], 140) if i < len(actions) else "",
+            }
 
         # -------------------------------------------------
-        # VALUE ADD
+        # VALUE ADD / PARTNERSHIP (slide 26)
+        #
+        # AI_ValueAddSummary doesn't exist either. The template's boxes are
+        # AI_ValueAddHeading (the lead line) and AI_PartnershipSummary, whose
+        # paragraph 0 is a fixed "WHAT THIS MEANS FOR THE PARTNERSHIP" label
+        # with the body in paragraph 2.
         # -------------------------------------------------
 
-        ppt["AI_ValueAddSummary"] = self.ai.get(
-            "value_add",
-            ""
+        ppt["AI_ValueAddHeading"] = self.clip(
+            self.ai.get("value_add_heading"),
+            190
         )
+
+        partnership = self.ai.get("partnership", {}) or {}
+
+        ppt["AI_PartnershipSummary"] = {
+            "object": "AI_PartnershipSummary",
+            "paragraph_index": 2,
+            "text": self.clip(
+                partnership.get("summary") or self.ai.get("value_add", ""),
+                420
+            ),
+        }
 
         value_add_metrics = self.tables.get("Value Add Metrics")
 
@@ -428,6 +532,127 @@ class PresentationData:
                     "paragraph_index": 1,
                     "text": row["Caption"],
                 }
+
+        # -------------------------------------------------
+        # SLIDE COMMENTARY BOXES
+        #
+        # Every box here previously showed the template's own example text --
+        # sentences about a different campaign entirely ("Medical billing and
+        # patient payments dominate conversation", "All 1,719 targeted
+        # accounts...") sitting next to this client's real charts.
+        #
+        # Only boxes that carry an insight about the slide's data get AI
+        # content. Labels, counts and boilerplate are computed below instead:
+        # asking a model to restate a number it was handed is just a chance
+        # for it to get the number wrong.
+        # -------------------------------------------------
+
+        def bulleted(object_name, bullets, limit, count=3):
+
+            """Writes `count` body lines into a box whose paragraph 0 is a
+            fixed bold label and paragraph 1 a blank spacer -- body starts at
+            paragraph 2. Lines the AI didn't supply are blanked so no template
+            sentence survives underneath."""
+
+            for i in range(count):
+
+                ppt[f"{object_name}_p{i}"] = {
+                    "object": object_name,
+                    "paragraph_index": i + 2,
+                    "text": self.clip(bullets[i], limit) if i < len(bullets) else "",
+                }
+
+        trend = self.ai.get("trend_analysis", {}) or {}
+        content_perf = self.ai.get("content_performance", {}) or {}
+        audience = self.ai.get("audience_interest", {}) or {}
+        engagement = self.ai.get("engagement", {}) or {}
+        top_accounts = self.ai.get("top_accounts", {}) or {}
+        opt_highlights = self.ai.get("optimization_highlights", {}) or {}
+        learnings = self.ai.get("key_learnings", {}) or {}
+
+        # Slide 13 - trend/projection chart
+        ppt["AI_TrendAnalysisHeading"] = self.clip(trend.get("heading"), 95)
+        bulleted("AI_TrendAnalysisSummary", trend.get("bullets", []), 105)
+
+        # Slide 15 - asset contribution chart
+        ppt["AI_ContentPerformanceHeading"] = self.clip(content_perf.get("heading"), 70)
+        bulleted("AI_ContentPerformanceSummary", content_perf.get("bullets", []), 115)
+
+        # Slide 17 - topic distribution
+        ppt["AI_AudienceInterestHeading"] = self.clip(audience.get("heading"), 80)
+        ppt["AI_AudienceInterestSummary"] = self.clip(audience.get("summary"), 180)
+
+        # Slide 18 - engagement funnel
+        bulleted("AI_EngagementSummary", engagement.get("bullets", []), 105)
+
+        # Slide 19 - top accounts / intent tables
+        ppt["AI_TopAccountsFooter"] = self.clip(top_accounts.get("footer"), 150)
+
+        # Slide 23 - optimization highlights
+        ppt["AI_OptimizationFooter"] = self.clip(opt_highlights.get("footer"), 190)
+
+        # Slide 24 - key learnings: 5 pairs, even paragraphs are the bold
+        # title, odd paragraphs the supporting detail. The template numbers
+        # each title ("1.  Reach is outpacing volume.") as part of the text
+        # rather than as list formatting, so the number is rebuilt here.
+        items = learnings.get("items", []) or []
+
+        for i in range(5):
+
+            item = items[i] if i < len(items) and isinstance(items[i], dict) else {}
+
+            title = self.clip(item.get("title"), 40)
+
+            ppt[f"AI_KeyLearnings_t{i}"] = {
+                "object": "AI_KeyLearnings",
+                "paragraph_index": i * 2,
+                "text": f"{i + 1}.  {title}" if title else "",
+            }
+
+            ppt[f"AI_KeyLearnings_d{i}"] = {
+                "object": "AI_KeyLearnings",
+                "paragraph_index": i * 2 + 1,
+                "text": self.clip(item.get("detail"), 135),
+            }
+
+        # -------------------------------------------------
+        # COMPUTED COMMENTARY (no AI)
+        #
+        # The template hardcodes "H1"/"H2" into these, which is wrong for any
+        # campaign not running on that calendar, and phrases two of them as
+        # growth ("momentum", "signals into action") which would misread a
+        # declining campaign. Both use direction-neutral wording built from
+        # the real period labels.
+        # -------------------------------------------------
+
+        period_label = periods.get("overall_label", "").split("  |  ")[0]
+        period_label = period_label or "this period"
+
+        ppt["AI_OptimizationHighlightsSummary"] = (
+            f"Turning {period_label} signals into the next period's actions"
+        )
+
+        ppt["AI_ClosingMessage"] = (
+            "Questions? Let's discuss how we build on these results together."
+        )
+
+        buying_stage = self.tables.get("Buying Stage Distribution")
+
+        if buying_stage is not None and not buying_stage.empty:
+
+            # The only client-specific value in this slide's commentary. The
+            # two stage captions beside it (AI_BuyingStageHeading1/2) are left
+            # at their template wording on purpose: they label the
+            # KPI_BuyingStage1/2 figures, which key on those exact stage names
+            # ("No Active Signals", "Consideration", "Decision"), so deriving
+            # the captions from the data instead would risk a caption that
+            # disagrees with the number printed next to it.
+            total_signal_accounts = int(buying_stage[buying_stage.columns[-1]].sum())
+
+            ppt["AI_BuyingStageSummary"] = (
+                f"Where the {self.format_count(total_signal_accounts)} "
+                f"signal-showing accounts sit in the buying journey"
+            )
 
         # -------------------------------------------------
         # KPI CARDS (Overall only -- per-slot Q1/Q2/P3... cards are
