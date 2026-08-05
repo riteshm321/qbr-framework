@@ -1,10 +1,50 @@
 import json
+import re
 
 from pathlib import Path
 
 from ai.prompt_builder import PromptBuilder
 from ai.provider_chain import ProviderChain
 from ai.markdown_exporter import MarkdownExporter
+
+
+# Models frequently append the word count they were asked to hit, so a bullet
+# comes back as "Leads fell 41% across the period. (14 words)" and that suffix
+# lands on the client's slide. The prompt now tells them not to, but no
+# instruction is reliably obeyed by every provider, so it is stripped here too
+# -- once, centrally, for every section and every provider.
+_WORD_COUNT_SUFFIX = re.compile(
+    r"\s*[\(\[]\s*(?:approx\.?\s*|about\s*|~\s*)?\d+\s*(?:words?|wds?)\s*[\)\]]\s*\.?",
+    re.IGNORECASE,
+)
+
+
+def strip_meta_annotations(value):
+    """Recursively removes model self-annotations (e.g. a trailing
+    "(14 words)") from every string in a parsed response, leaving structure
+    and numbers untouched."""
+
+    if isinstance(value, str):
+
+        cleaned = _WORD_COUNT_SUFFIX.sub(" ", value).strip()
+
+        # A suffix removed from mid-string can leave a doubled space, and one
+        # removed from the end can leave the sentence without its full stop.
+        cleaned = re.sub(r"\s{2,}", " ", cleaned)
+
+        if cleaned and cleaned[-1] not in ".!?:;,)":
+            if value.rstrip().endswith((".", "!", "?")) or _WORD_COUNT_SUFFIX.search(value):
+                cleaned += "."
+
+        return cleaned
+
+    if isinstance(value, dict):
+        return {key: strip_meta_annotations(item) for key, item in value.items()}
+
+    if isinstance(value, list):
+        return [strip_meta_annotations(item) for item in value]
+
+    return value
 
 
 def strip_code_fences(text):
@@ -41,7 +81,7 @@ def parse_response(text):
     if not isinstance(parsed, dict):
         raise ValueError(f"expected a JSON object, got {type(parsed).__name__}")
 
-    return parsed
+    return strip_meta_annotations(parsed)
 
 
 class AIEngine:

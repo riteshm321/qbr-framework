@@ -34,10 +34,15 @@ FONT_SIZE_OVERRIDES = {
 # of points buys a line per bullet, which is what keeps full sentences intact
 # instead of truncating them mid-clause.
 COMMENTARY_BODY_FONT = {
-    "AI_TrendAnalysisSummary": Pt(12),
-    "AI_EngagementSummary": Pt(12),
-    "AI_ContentPerformanceSummary": Pt(12),
+    "AI_TrendAnalysisSummary": Pt(11),
+    "AI_EngagementSummary": Pt(11),
+    "AI_ContentPerformanceSummary": Pt(11),
 }
+
+# Vertical space at the foot of every slide occupied by the template's
+# confidentiality line and logo. Footnote boxes are parked just above this
+# rather than relative to the content above them -- see fit_footnote().
+FOOTER_BAND_HEIGHT = Emu(640000)
 
 # Explicit per-series colors for the comparison chart. The template's own
 # Q1/Q2 colors lead the list so the 2-period case looks unchanged;
@@ -1703,6 +1708,81 @@ class PowerPointEngine:
     # looking like real data for whatever client this deck is for.
     # ---------------------------------------------------------
 
+    def fit_footnote(self, object_name, reference_names, min_height, gap=45720):
+
+        """
+        Keeps a one-line footnote box clear of the content above it and gives
+        it room for the text it actually received.
+
+        Two template traits make these boxes collide with their own slide.
+        They are sized for a single short line (AI_TopAccountsFooter is 0.17in
+        tall), so real commentary wraps to two or three lines and spills out of
+        the box -- upward, over the tables above it. And some sit slightly
+        inside the shape above them to begin with.
+
+        Rather than hardcode positions per slide, this measures: it drops the
+        box below everything in `reference_names`, grows it to `min_height`,
+        and enables word wrap. Any campaign, any client, any text length --
+        the box moves to fit rather than the text being cut to fit.
+        """
+
+        shape = self.find_shape(object_name)
+
+        if shape is None:
+            return
+
+        references = [
+            self.find_shape(name) for name in reference_names
+        ]
+
+        bottoms = [
+            r.top + r.height
+            for r in references
+            if r is not None and r.top is not None and r.height is not None
+        ]
+
+        if not bottoms:
+            return
+
+        original_top, original_height = shape.top, shape.height
+
+        if shape.height < min_height:
+            shape.height = min_height
+
+        # Anchored to the bottom of the slide rather than to the bottom of the
+        # content above it. The tables above these footnotes contain client
+        # names, and PowerPoint grows a row at render time to fit a name that
+        # wraps -- so shape.height under-reports how tall the table really is,
+        # and "below the table" computed from it can still land inside the
+        # rendered table. Sitting just above the footer band is the position
+        # that holds for any client's data.
+        floor_top = (
+            self.prs.slide_height - FOOTER_BAND_HEIGHT - shape.height
+        )
+
+        target_top = max(max(bottoms) + gap, floor_top)
+
+        if shape.top < target_top:
+            shape.top = target_top
+
+        # Without this a long line runs off the side of the slide instead of
+        # wrapping into the height just made available for it.
+        if shape.has_text_frame:
+            shape.text_frame.word_wrap = True
+
+        # Never push the box off the bottom of the slide; if the space simply
+        # isn't there, keep it on-slide and let the smaller height apply.
+        slide_height = self.prs.slide_height
+
+        if shape.top + shape.height > slide_height:
+            shape.height = max(original_height, slide_height - shape.top)
+
+        if (shape.top, shape.height) != (original_top, original_height):
+            print(
+                f"[REFLOWED] {object_name} top {original_top} -> {shape.top}, "
+                f"height {original_height} -> {shape.height}"
+            )
+
     def clear_comparison_summary_overlap(self):
 
         """
@@ -1802,6 +1882,20 @@ class PowerPointEngine:
             self.apply_commentary_body_font()
 
             self.clear_comparison_summary_overlap()
+
+            # Footnote boxes the template sized for one short line, which real
+            # commentary overflows into the content above them.
+            self.fit_footnote(
+                "AI_TopAccountsFooter",
+                ["Table_TopEngagedAccounts", "Table_TopIntentCompanies"],
+                min_height=Emu(600000),
+            )
+
+            self.fit_footnote(
+                "AI_OptimizationFooter",
+                ["Table_OptimizationHighlights"],
+                min_height=Emu(500000),
+            )
 
         if merge_period_boxes:
 

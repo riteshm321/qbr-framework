@@ -5,6 +5,7 @@ Every module writes here.
 Only ppt_engine.py reads from here.
 """
 import math
+import re
 import textwrap
 import pandas as pd
 
@@ -163,6 +164,39 @@ class PresentationData:
             return text
 
         return fallback
+
+    @staticmethod
+    def shorten_entity(text, limit=32):
+
+        """
+        A company/account name short enough for one line of a table cell.
+
+        Two things make these values long enough to wrap, and a wrapped cell
+        grows its row -- which pushes the table past the space the template
+        allotted it and over whatever sits below. PowerPoint grows rows at
+        render time, so python-pptx reports the original height and no
+        geometry check can detect it; the only reliable fix is to keep the
+        text short in the first place.
+
+        First, the source data concatenates the domain onto the name
+        ("Solvay(solvay.com)"). That is dropped -- the domain adds nothing on
+        a slide and nearly doubles the length. Only a trailing parenthetical
+        that looks like a domain is removed, so a name with its own brackets
+        (e.g. a Chinese entity name containing "(中国)") keeps them.
+
+        Second, some names are simply long, so what remains is capped.
+        """
+
+        text = str(text or "").strip()
+
+        # Trailing "(something.tld)" only -- requires a dot and a short
+        # alphabetic suffix so it can't match a genuine bracketed name part.
+        text = re.sub(r"\s*\([^()]*\.[A-Za-z]{2,6}\)\s*$", "", text).strip()
+
+        if len(text) <= limit:
+            return text
+
+        return text[:limit].rstrip(" ,.;:-–—") + "…"
 
     @staticmethod
     def clip(text, limit):
@@ -758,21 +792,21 @@ class PresentationData:
 
         # Slide 13 - trend/projection chart
         ppt["AI_TrendAnalysisHeading"] = self.clip(trend.get("heading"), 95)
-        bulleted("AI_TrendAnalysisSummary", trend.get("bullets", []), 105)
+        bulleted("AI_TrendAnalysisSummary", trend.get("bullets", []), 125)
 
         # Slide 15 - asset contribution chart
         ppt["AI_ContentPerformanceHeading"] = self.clip(content_perf.get("heading"), 70)
-        bulleted("AI_ContentPerformanceSummary", content_perf.get("bullets", []), 115)
+        bulleted("AI_ContentPerformanceSummary", content_perf.get("bullets", []), 130)
 
         # Slide 17 - topic distribution
         ppt["AI_AudienceInterestHeading"] = self.clip(audience.get("heading"), 80)
         ppt["AI_AudienceInterestSummary"] = self.clip(audience.get("summary"), 180)
 
         # Slide 18 - engagement funnel
-        bulleted("AI_EngagementSummary", engagement.get("bullets", []), 105)
+        bulleted("AI_EngagementSummary", engagement.get("bullets", []), 125)
 
         # Slide 19 - top accounts / intent tables
-        ppt["AI_TopAccountsFooter"] = self.clip(top_accounts.get("footer"), 150)
+        ppt["AI_TopAccountsFooter"] = self.clip(top_accounts.get("footer"), 135)
 
         # Slide 23 - optimization highlights
         ppt["AI_OptimizationFooter"] = self.clip(opt_highlights.get("footer"), 190)
@@ -1000,6 +1034,13 @@ class PresentationData:
         # POWERPOINT TABLES
         # -------------------------------------------------
 
+        # Account and topic values are shortened for display only -- the full
+        # values stay in self.tables for the Excel export. A cell long enough
+        # to wrap makes PowerPoint grow that row at render time, which pushes
+        # the table past the height the template allotted it and over the
+        # footnote below; because the growth happens at render time,
+        # python-pptx still reports the original height and no geometry check
+        # can catch it. Keeping the text short is the only reliable fix.
         top_engaged_accounts = self.tables.get("Top Engaged Accounts")
 
         if top_engaged_accounts is not None:
@@ -1007,11 +1048,29 @@ class PresentationData:
                 ["Account Name", "Leads"]
             ].copy()
 
+            top_engaged_accounts["Account Name"] = (
+                top_engaged_accounts["Account Name"].apply(self.shorten_entity)
+            )
+
         ppt["Table_TopEngagedAccounts"] = top_engaged_accounts
 
-        ppt["Table_TopIntentCompanies"] = self.tables.get(
-            "Top Intent Companies"
-        )
+        top_intent = self.tables.get("Top Intent Companies")
+
+        if top_intent is not None and not top_intent.empty:
+
+            top_intent = top_intent.copy()
+
+            if "Account" in top_intent.columns:
+                top_intent["Account"] = top_intent["Account"].apply(
+                    self.shorten_entity
+                )
+
+            if "Topic" in top_intent.columns:
+                top_intent["Topic"] = top_intent["Topic"].apply(
+                    lambda value: self.shorten_entity(value, limit=28)
+                )
+
+        ppt["Table_TopIntentCompanies"] = top_intent
 
         # The template's static heading reads "TOP INTENT COMPANIES (BY
         # ML SCORE)" -- these are accounts (the same entity as the Top

@@ -383,21 +383,39 @@ class LeadGenAnalyzer:
 
         if mode in (MONTHLY, CAMPAIGN, QUARTERLY):
 
-            # Same grouping for Monthly/Campaign/Quarterly: real calendar
-            # quarters (a quarter missing one of its 3 months, e.g. a
-            # month with zero leads that got skipped, still forms one
+            # Real calendar quarters (a quarter missing one of its 3 months,
+            # e.g. a month with zero leads that got skipped, still forms one
             # group from whichever real months belong to it). Several
-            # individual months read as a noisy zigzag line -- this
-            # gives a clean few-point real trend to project a forecast
-            # from instead of fitting a line through every swing. Since
-            # Quarter over Quarter's ANALYSIS_WINDOW is the whole
-            # campaign (every real quarter, not a couple hand-picked
-            # ones), deriving straight from self.leads here reproduces
-            # the exact same quarters as self.periods does for that mode.
+            # individual months read as a noisy zigzag line -- grouping gives
+            # a clean few-point real trend to project a forecast from instead
+            # of fitting a line through every swing. Since Quarter over
+            # Quarter's ANALYSIS_WINDOW is the whole campaign (every real
+            # quarter, not a couple hand-picked ones), deriving straight from
+            # self.leads here reproduces the exact same quarters as
+            # self.periods does for that mode.
             months = self._constituent_month_periods(self.leads)
-            grouped = self._group_by_calendar_quarter(months)
 
-            for label, df in grouped:
+            # ...but ONLY when the quarters being compared are actually
+            # comparable. Grouping a campaign that spans, say, April to July
+            # buckets three months into one quarter and the fourth into the
+            # next, so the chart plots a 3-month total against a 1-month total
+            # and shows a ~90% "collapse" that is purely an artefact of
+            # unequal bucket sizes -- which then drags the forecast to zero and
+            # makes the whole chart unreadable. Below MIN_MONTHS_TO_GROUP there
+            # are few enough months to plot individually, which is both honest
+            # (every point covers one month) and gives the fit more points to
+            # work with.
+            if len(months) < config.MIN_MONTHS_TO_GROUP:
+
+                points = [
+                    (period.strftime("%B"), month_df)
+                    for period, month_df in months
+                ]
+
+            else:
+                points = self._group_by_calendar_quarter(months)
+
+            for label, df in points:
                 real_points.append((label, self._trend_metrics(df)))
                 real_dfs.append(df)
 

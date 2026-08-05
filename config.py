@@ -38,6 +38,15 @@ ANALYSIS_WINDOW = None
 # slots for the comparison chart/table instead (see LeadGenAnalyzer).
 MAX_MONTHLY_DETAIL_SLIDES = 6
 
+# Trend chart: below this many constituent months, plot each month as its own
+# point instead of grouping them into calendar quarters. Grouping a short
+# campaign produces unequal buckets (e.g. Apr+May+Jun in one quarter, Jul alone
+# in the next), and plotting a 3-month total against a 1-month total shows a
+# collapse that is an artefact of bucket size rather than performance -- which
+# also drags the forecast to zero. 9 months is three full quarters, the point
+# at which grouping starts comparing like with like.
+MIN_MONTHS_TO_GROUP = 9
+
 # ==========================
 # Paths
 # ==========================

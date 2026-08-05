@@ -188,6 +188,11 @@ WORD COUNTS ARE RANGES: land inside the stated range. Going over gets the text
 cut off mid-sentence on the client's slide; coming in far under leaves the box
 looking empty. A range of "10-14 words" means write 10 to 14 words, not 3.
 
+NEVER write the word count into your answer. Counting is for you, not for the
+reader -- every string you return is printed verbatim onto a client-facing
+slide, so a trailing "(14 words)" appears in the presentation. Return only the
+sentence itself.
+
 - PeriodAnalysis: exactly one entry per label listed under
   "Periods Needing Individual Commentary", in that same order, and each
   "period" value must be that exact label. Each "summary" 22-30 words.
