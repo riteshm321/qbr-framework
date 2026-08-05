@@ -37,11 +37,17 @@ def _manual():
     return ManualClient()
 
 
+def _deterministic():
+    from ai.deterministic_client import DeterministicClient
+    return DeterministicClient()
+
+
 FACTORIES = {
     "gemini": _gemini,
     "groq": _groq,
     "openai": _openai,
     "manual": _manual,
+    "deterministic": _deterministic,
 }
 
 

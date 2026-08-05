@@ -63,11 +63,13 @@ LOG_DIR.mkdir(exist_ok=True)
 # skipped automatically, so this list can safely name more providers than you
 # currently hold keys for. Add a key, and that provider joins the chain with
 # no code change.
-# "manual" is deliberately last: it serves hand-authored narrative from
-# output/ai_manual_<mode>.json and only runs when every API provider has
-# failed, which in practice means their free quotas are exhausted. With no such
-# file present it is skipped like any provider missing its key.
-AI_PROVIDER_CHAIN = ["gemini", "groq", "openai", "manual"]
+# "manual" serves hand-authored narrative from output/ai_manual_<mode>.json,
+# for a curated override on a specific deck -- skipped like a missing API key
+# when no such file exists. "deterministic" is genuinely last and never
+# skipped: it computes the full narrative from qbr_package.json with no
+# network, key or quota, so a colleague running the distributed .exe with no
+# AI provider configured at all still gets a complete, data-grounded deck.
+AI_PROVIDER_CHAIN = ["gemini", "groq", "openai", "manual", "deterministic"]
 
 # Report modes whose AI narrative is cached and reused. Custom Date Range is
 # excluded on purpose: an ad-hoc window is unlikely to be re-run with exactly
