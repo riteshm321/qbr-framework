@@ -37,6 +37,8 @@ COMMENTARY_BODY_FONT = {
     "AI_TrendAnalysisSummary": Pt(11),
     "AI_EngagementSummary": Pt(11),
     "AI_ContentPerformanceSummary": Pt(11),
+    # Cloned from the funnel card, so it inherits the same sizing problem.
+    "AI_CountrySummary": Pt(11),
 }
 
 # Vertical space at the foot of every slide occupied by the template's
@@ -578,6 +580,20 @@ class PowerPointEngine:
         if object_name == "Chart_TopicDistribution":
 
             self._style_topic_distribution(chart, dataframe)
+
+        if object_name == "Chart_CountryDistribution":
+
+            # Cloned from the funnel chart, which colours per series -- with one
+            # series that paints every country the same. Highlighting the
+            # largest market instead gives the chart a focal point, matching how
+            # Content Performance and Trending Topics treat their own top bar.
+            value_column = dataframe.columns[1]
+
+            self._highlight_top_n_points(chart, dataframe[value_column].tolist(), 1)
+
+            # A single series needs no legend -- the axis already names every
+            # country, so a legend reading "Leads" only adds clutter.
+            chart.has_legend = False
 
         if object_name == "Chart_BuyingStage":
 
@@ -1711,6 +1727,66 @@ class PowerPointEngine:
     # looking like real data for whatever client this deck is for.
     # ---------------------------------------------------------
 
+    # The geographic slide is built by cloning the engagement funnel slide,
+    # which already carries exactly the layout it needs: a horizontal bar chart
+    # on the left and an insights card on the right, in the deck's own styling.
+    # Cloning rather than composing from scratch means it inherits the
+    # template's fonts, colours and spacing automatically, and honours the rule
+    # that the template file itself is never edited.
+    COUNTRY_SLIDE_DONOR = "Chart_EngagementFunnel"
+
+    COUNTRY_SLIDE_RENAMES = {
+        "TITLE_EngagementFunnel": "TITLE_CountryDistribution",
+        "Chart_EngagementFunnel": "Chart_CountryDistribution",
+        "CARD_EngagementFunnel": "CARD_CountryDistribution",
+        "AI_EngagementHeading": "AI_CountryHeading",
+        "AI_EngagementSummary": "AI_CountrySummary",
+    }
+
+    def add_country_slide(self):
+
+        """
+        Adds the geographic distribution slide, immediately after the funnel it
+        was cloned from -- both read the same audience from different angles, so
+        they belong together in the insights section.
+
+        Returns True when the slide was added. Skipped silently when the donor
+        can't be found, so a template without that slide degrades to a deck
+        without this one rather than failing.
+        """
+
+        donor_index = self._slide_index_by_shape(self.COUNTRY_SLIDE_DONOR)
+
+        if donor_index is None:
+            print("[SKIPPED] add_country_slide (donor slide not found)")
+            return False
+
+        new_slide = duplicate_slide(self.prs, donor_index, donor_index + 1)
+
+        renamed = 0
+
+        def walk(shapes):
+
+            nonlocal renamed
+
+            for shape in shapes:
+
+                if shape.name in self.COUNTRY_SLIDE_RENAMES:
+                    shape.name = self.COUNTRY_SLIDE_RENAMES[shape.name]
+                    renamed += 1
+
+                if hasattr(shape, "shapes"):
+                    walk(shape.shapes)
+
+        walk(new_slide.shapes)
+
+        print(
+            f"[ADDED] geographic distribution slide after slide "
+            f"{donor_index + 1} ({renamed} shapes renamed)"
+        )
+
+        return True
+
     def fit_footnote(self, object_name, reference_names, min_height, gap=45720):
 
         """
@@ -1859,7 +1935,8 @@ class PowerPointEngine:
         replacements=None,
         merge_period_boxes=False,
         periods=None,
-        empty_data_slides=None
+        empty_data_slides=None,
+        add_country_slide=False
     ):
 
         self.load()
@@ -1870,6 +1947,12 @@ class PowerPointEngine:
                 periods.get("slots", []),
                 periods.get("comparison_slots", [])
             )
+
+        # Before the fill pass, so its shapes exist to be filled -- and before
+        # the empty-data deletions, so a campaign with no country data has this
+        # slide removed by the same mechanism as any other dataless slide.
+        if add_country_slide:
+            self.add_country_slide()
 
         if empty_data_slides:
             self._delete_slides_by_shape(empty_data_slides)

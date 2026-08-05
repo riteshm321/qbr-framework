@@ -161,14 +161,70 @@ class LeadGenAnalyzer:
 
         start, end = self._bounds(df)
 
+        partial = self._is_partial(start, end)
+
         return {
             "slot": self._slot_id(index),
-            "label": label,
+            # A partial period is marked in the label itself so it carries
+            # through to every chart legend and table header it appears in.
+            "label": f"{label} *" if partial else label,
+            "plain_label": label,
+            "partial": partial,
             "df": df,
             "start": self._fmt(start),
             "end": self._fmt(end),
             "metrics": self._slot_metrics(df),
         }
+
+    @staticmethod
+    def _is_partial(start, end):
+
+        """
+        True when the campaign window covered only part of this period's
+        calendar month or quarter.
+
+        A campaign running 7 April to 27 July delivers four monthly periods, but
+        the first and last cover 24 and 27 days against full months between.
+        Comparing them like for like reads as a decline that is really just
+        fewer days -- the most common way a QBR misstates its own performance --
+        so they are flagged.
+
+        Judged against the CAMPAIGN WINDOW, not against the first and last dates
+        a lead happens to land on. Those are different questions: no leads
+        delivered on 30-31 May does not make May a partial month, it makes it a
+        quiet month end, and treating it as partial would flag every period and
+        make the marker meaningless.
+
+        Periods spanning more than one calendar unit (the single "Full Campaign"
+        slot) are never partial -- they cover whatever they cover by definition.
+        """
+
+        if start is None or end is None:
+            return False
+
+        window = config.ANALYSIS_WINDOW
+
+        if not window or not window[0] or not window[1]:
+            return False
+
+        start = pd.Timestamp(start)
+        end = pd.Timestamp(end)
+
+        # A range inside one month is judged against that month, anything
+        # longer against its quarter.
+        same_month = (start.year, start.month) == (end.year, end.month)
+
+        unit = "M" if same_month else "Q"
+
+        if start.to_period(unit) != end.to_period(unit):
+            return False
+
+        calendar_period = start.to_period(unit)
+
+        return (
+            calendar_period.start_time < pd.Timestamp(window[0])
+            or calendar_period.end_time.normalize() > pd.Timestamp(window[1])
+        )
 
     @staticmethod
     def _constituent_month_periods(df):
@@ -915,6 +971,8 @@ class LeadGenAnalyzer:
 
         self.build_topic_categories()
 
+        self.build_country_distribution()
+
         self.build_top_intent_companies()
 
         self.build_qoq_comparison()
@@ -1099,6 +1157,66 @@ class LeadGenAnalyzer:
         table.insert(0, "Rank", range(1, len(table)+1))
 
         self.tables["Trending Topics"] = table.head(20)
+
+    def build_country_distribution(self):
+
+        """
+        Delivered leads by country, largest first, with each country's share.
+
+        Verified against the platform's own Region view: for one campaign this
+        reproduces 744 / 311 / 172 / 109 / 36 exactly, summing to the campaign's
+        1,372 delivered leads.
+
+        Countries beyond MAX_COUNTRIES_ON_CHART are combined into one "Other
+        countries" row rather than dropped, so the bars stay readable on a
+        campaign selling into dozens of markets while the total still
+        reconciles to the campaign's lead count.
+        """
+
+        df = self.leads
+
+        if df.empty or "Country" not in df.columns:
+            self.tables["Country Distribution"] = pd.DataFrame(
+                columns=["Country", "Leads", "Share %"]
+            )
+            return
+
+        counts = (
+            df.dropna(subset=["Country"])
+            .groupby("Country")
+            .size()
+            .sort_values(ascending=False)
+            .reset_index(name="Leads")
+        )
+
+        if counts.empty:
+            self.tables["Country Distribution"] = pd.DataFrame(
+                columns=["Country", "Leads", "Share %"]
+            )
+            return
+
+        limit = config.MAX_COUNTRIES_ON_CHART
+
+        if len(counts) > limit:
+
+            head = counts.iloc[: limit - 1].copy()
+
+            tail = counts.iloc[limit - 1 :]
+
+            head.loc[len(head)] = {
+                "Country": f"Other ({len(tail)} countries)",
+                "Leads": int(tail["Leads"].sum()),
+            }
+
+            counts = head
+
+        total = counts["Leads"].sum()
+
+        counts["Share %"] = (
+            (counts["Leads"] / total * 100).round(2) if total else 0
+        )
+
+        self.tables["Country Distribution"] = counts
 
     def build_topic_categories(self):
 

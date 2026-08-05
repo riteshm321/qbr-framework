@@ -47,6 +47,12 @@ MAX_MONTHLY_DETAIL_SLIDES = 6
 # at which grouping starts comparing like with like.
 MIN_MONTHS_TO_GROUP = 9
 
+# Geographic distribution slide: countries beyond this many are combined into a
+# single "Other" bar. A campaign selling into 30 markets would otherwise
+# produce unreadable bars; the combined row keeps the total reconciling to the
+# campaign's lead count.
+MAX_COUNTRIES_ON_CHART = 8
+
 # ==========================
 # Paths
 # ==========================

@@ -150,6 +150,7 @@ class StoryBuilder:
             ("trend_analysis", "TrendAnalysis"),
             ("content_performance", "ContentPerformance"),
             ("audience_interest", "AudienceInterest"),
+            ("geography", "Geography"),
             ("engagement", "Engagement"),
             ("top_accounts", "TopAccounts"),
             ("optimization_highlights", "OptimizationHighlights"),

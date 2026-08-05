@@ -56,6 +56,11 @@ class AIExporter:
                 "Period": slot.get("label", ""),
                 "Start": slot.get("start", ""),
                 "End": slot.get("end", ""),
+                # A period the campaign only partly covered. Flagged so the
+                # narrative attributes a smaller figure to fewer days rather
+                # than to weaker performance -- the most common way a QBR
+                # misreads its own first and last period.
+                "Partial Period": bool(slot.get("partial")),
             }
 
             entry.update(slot.get("metrics", {}))
@@ -208,6 +213,8 @@ class AIExporter:
             "Buying Stage Distribution": self._records("Buying Stage Distribution"),
 
             "Asset Contribution": self._records("Asset Contribution"),
+
+            "Country Distribution": self._records("Country Distribution"),
 
             "Value Add Metrics": self._records("Value Add Metrics"),
 

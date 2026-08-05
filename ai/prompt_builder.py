@@ -62,6 +62,13 @@ IMPORTANT RULES
    not call a decline "growth" or "momentum". Where a metric declined, say so
    plainly and treat it as an optimization opportunity.
 
+8b. PARTIAL PERIODS. Any period whose "Partial Period" is true covers only part
+   of its calendar month or quarter, because the campaign started or ended
+   mid-way through it. Its total is lower for that reason alone. Never present
+   such a period as a decline in performance -- if it is the lowest, say the
+   period was partial. Its label already carries a trailing asterisk; keep that
+   asterisk when you quote the label.
+
 9. FORMATTING. Write counts of a thousand or more with a thousands separator
    ("12,345", not "12345"), so the narrative matches the figures printed on the
    slides beside it. That is a formatting example only -- never treat it, or any
@@ -130,6 +137,11 @@ Use exactly this schema.
     "AudienceInterest": {{
         "heading":"",
         "summary":""
+    }},
+
+    "Geography": {{
+        "heading":"",
+        "bullets":[]
     }},
 
     "Engagement": {{
@@ -210,6 +222,13 @@ sentence itself.
 
 - AudienceInterest: read "Trending Topics" and "Topic Categories".
   heading 8-12 words; summary 18-26 words.
+
+- Geography: read "Country Distribution", which gives delivered leads and share
+  of total by country. Say where demand concentrated and what that implies for
+  where to invest next -- concentration in one market and a long tail of small
+  ones are different situations. A row named "Other (N countries)" is a combined
+  remainder, not a place: never describe it as a market.
+  heading 8-12 words; exactly 3 bullets, 10-14 WORDS EACH.
 
 - Engagement: read "Account Funnel" and "Account Conversion" -- the
   Targeted / Reached / Engaged account funnel. This is NOT about impressions,

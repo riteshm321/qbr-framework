@@ -37,6 +37,8 @@ class MarkdownExporter:
 
             "AudienceInterest": "Audience_Interest.md",
 
+            "Geography": "Geography.md",
+
             "Engagement": "Engagement.md",
 
             "TopAccounts": "Top_Accounts.md",

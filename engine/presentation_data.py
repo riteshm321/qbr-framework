@@ -56,6 +56,8 @@ class PresentationData:
 
             "audience_interest": {},
 
+            "geography": {},
+
             "engagement": {},
 
             "top_accounts": {},
@@ -805,6 +807,26 @@ class PresentationData:
         # Slide 18 - engagement funnel
         bulleted("AI_EngagementSummary", engagement.get("bullets", []), 125)
 
+        # Geographic distribution -- a slide cloned from the funnel at build
+        # time (see PowerPointEngine.add_country_slide), so its boxes carry the
+        # same "label + blank + 3 lines" structure the helper above expects.
+        geography = self.ai.get("geography", {}) or {}
+
+        ppt["TITLE_CountryDistribution"] = "Geographic Distribution"
+
+        ppt["AI_CountryHeading"] = self.clip(geography.get("heading"), 95)
+
+        # Paragraph 0 is the card's own bold label, inherited from the funnel
+        # card as "FUNNEL READ" -- it has to be rewritten or the new slide
+        # carries the donor slide's caption.
+        ppt["AI_CountrySummary_label"] = {
+            "object": "AI_CountrySummary",
+            "paragraph_index": 0,
+            "text": "GEOGRAPHIC READ",
+        }
+
+        bulleted("AI_CountrySummary", geography.get("bullets", []), 125)
+
         # Slide 19 - top accounts / intent tables
         ppt["AI_TopAccountsFooter"] = self.clip(top_accounts.get("footer"), 135)
 
@@ -869,9 +891,15 @@ class PresentationData:
             # disagrees with the number printed next to it.
             total_signal_accounts = int(buying_stage[buying_stage.columns[-1]].sum())
 
+            # Says "trending accounts" explicitly. This chart covers the
+            # trending universe only -- the same scope as the funnel's single
+            # series -- while the platform's own Buying Stage view is split
+            # across Targeted / Reached / Engaged tabs against the full
+            # targeted list. Without naming the scope the counts look like the
+            # whole account base and won't reconcile against the platform.
             ppt["AI_BuyingStageSummary"] = (
                 f"Where the {self.format_count(total_signal_accounts)} "
-                f"signal-showing accounts sit in the buying journey"
+                "trending accounts sit in the buying journey"
             )
 
         # -------------------------------------------------
@@ -1314,6 +1342,22 @@ class PresentationData:
         buying_stage_chart = self.tables["Buying Stage Distribution"].copy()
 
         ppt["Chart_BuyingStage"] = buying_stage_chart
+
+        # -------------------------------------------------
+        # GEOGRAPHIC DISTRIBUTION
+        #
+        # Largest market last: a horizontal bar chart plots the first category
+        # at the bottom, so reversing puts the biggest bar at the top where a
+        # reader looks first.
+        # -------------------------------------------------
+
+        country = self.tables.get("Country Distribution")
+
+        if country is not None and not country.empty:
+
+            country_chart = country[["Country", "Leads"]].iloc[::-1].copy()
+
+            ppt["Chart_CountryDistribution"] = country_chart
 
         # KPI_BuyingStage1 sits next to the "No Active Signals" caption,
         # KPI_BuyingStage2 next to the "Consideration + Decision" caption

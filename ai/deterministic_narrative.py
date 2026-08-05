@@ -335,6 +335,35 @@ class DeterministicNarrativeBuilder:
                     "since.",
                 ))
 
+        # 2b. A partial first or last period is the most common way a QBR
+        #     misreads itself: fewer days looks identical to weaker performance
+        #     on a bar chart. Ranked high because it changes how every other
+        #     comparison on the deck should be read.
+        partial = [
+            e.get("Period") for e in self.breakdown
+            if e.get("Partial Period")
+        ]
+
+        if partial and entries:
+
+            lowest = min(entries, key=lambda e: _num(e.get("Total Leads")))
+
+            if lowest.get("Partial Period"):
+                found.append((
+                    93,
+                    "The lowest period is a partial one",
+                    f"{lowest['Period']} covers only part of its calendar period, "
+                    "so its lower total reflects fewer days rather than weaker "
+                    "performance.",
+                ))
+            else:
+                found.append((
+                    72,
+                    "Some periods are partial",
+                    f"{_join_and(partial)} cover only part of their calendar "
+                    "period, so their totals are not directly comparable.",
+                ))
+
         # 3. Periods with no data at all are easy to miss on a chart that
         #    simply omits them, and they change how every average reads.
         gaps = self._coverage_gaps()
@@ -1054,6 +1083,85 @@ class DeterministicNarrativeBuilder:
         return {"heading": heading, "summary": summary}
 
     # --------------------------------------------------------
+    # Geography
+    # --------------------------------------------------------
+
+    def geography(self):
+
+        rows = self.package.get("Country Distribution", []) or []
+
+        if not rows:
+            return {
+                "heading": "No country-level data available for this campaign.",
+                "bullets": [],
+            }
+
+        # "Other (N countries)" is a combined remainder, not a market -- it must
+        # never be described as the leading or a named country.
+        real = [r for r in rows if not str(r.get("Country", "")).startswith("Other (")]
+
+        if not real:
+            return {
+                "heading": f"Leads spread across {len(rows)} markets.",
+                "bullets": [],
+            }
+
+        top = real[0]
+        top_share = _num(top.get("Share %"))
+
+        if top_share >= 50:
+            heading = (
+                f"{top.get('Country')} dominates delivery with "
+                f"{top_share:.1f}% of all leads."
+            )
+        elif top_share >= 30:
+            heading = (
+                f"{top.get('Country')} leads delivery at {top_share:.1f}% "
+                "of the total."
+            )
+        else:
+            heading = (
+                f"Demand is spread across {len(rows)} markets with no single "
+                "one dominant."
+            )
+
+        bullets = [
+            f"{top.get('Country')} delivered {_count(top.get('Leads'))} leads, "
+            f"{top_share:.1f}% of the total."
+        ]
+
+        if len(real) > 1:
+
+            second = real[1]
+
+            bullets.append(
+                f"{second.get('Country')} follows with "
+                f"{_count(second.get('Leads'))} leads at "
+                f"{_num(second.get('Share %')):.1f}%."
+            )
+
+        # Concentration is the actionable read: a top-two carrying most of the
+        # volume is a very different position from an even spread.
+        top_two = sum(_num(r.get("Share %")) for r in real[:2])
+
+        if top_two >= 70:
+            bullets.append(
+                f"The top two markets carry {top_two:.1f}% of volume, "
+                "so growth depends on widening beyond them."
+            )
+        else:
+            tail = len(rows) - 2
+
+            bullets.append(
+                f"{tail} further market(s) contribute the remainder, "
+                "a genuinely diversified footprint."
+                if tail > 0
+                else "Delivery is concentrated in a small number of markets."
+            )
+
+        return {"heading": heading, "bullets": bullets[:3]}
+
+    # --------------------------------------------------------
     # Engagement
     # --------------------------------------------------------
 
@@ -1286,6 +1394,7 @@ class DeterministicNarrativeBuilder:
             "TrendAnalysis": self.trend_analysis(),
             "ContentPerformance": self.content_performance(),
             "AudienceInterest": self.audience_interest(),
+            "Geography": self.geography(),
             "Engagement": self.engagement(),
             "TopAccounts": self.top_accounts(),
             "OptimizationHighlights": self.optimization_highlights(),
