@@ -1284,6 +1284,21 @@ class PresentationData:
 
         ppt["Chart_EngagementFunnel"] = funnel_chart
 
+        # The funnel carries an "All Accounts" series only when a Target
+        # Account List History report was supplied -- that is the only export
+        # holding the full targeted universe. When it's absent the chart shows
+        # trending accounts alone, so the heading says so: a reader comparing
+        # this against the platform would otherwise assume the smaller figures
+        # were the whole picture rather than one of two series.
+        if "All Accounts" in funnel_chart.columns:
+            ppt["AI_EngagementHeading"] = (
+                "From intent-based targeting to active engagement"
+            )
+        else:
+            ppt["AI_EngagementHeading"] = (
+                "Trending accounts only - from intent-based targeting to active engagement"
+            )
+
         # -------------------------------------------------
         # BUYING STAGE DISTRIBUTION
         # -------------------------------------------------

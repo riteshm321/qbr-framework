@@ -1399,9 +1399,28 @@ class LeadGenAnalyzer:
 
         history = self.datasets.get(TARGET_ACCOUNT_HISTORY)
 
-        if history is not None and "Accounts Targeted" in history.columns:
+        if history is None or "Accounts Targeted" not in getattr(history, "columns", []):
 
-            targeted_all = history["Accounts Targeted"].notna().sum()
+            # Say so rather than silently dropping half the chart. Without this
+            # the funnel quietly renders a single series and looks like a bug in
+            # the chart rather than a missing input.
+            print(
+                "\n[FUNNEL] No Target Account List History report found - "
+                "the 'All Accounts' series is omitted."
+            )
+            print(
+                "         Only that report carries the full targeted universe; "
+                "Account Engagement covers accounts with activity and Trending "
+                "Accounts only trending ones, so neither can substitute for it."
+            )
+            print(
+                "         Export that report for this campaign into input/ to "
+                "show All Accounts alongside Trending.\n"
+            )
+
+        else:
+
+            targeted_all = self._targeted_universe(history)
 
             engagement = self.account_engagement
 
@@ -1421,9 +1440,62 @@ class LeadGenAnalyzer:
                 engagement["Leads"].fillna(0) > 0, "Account Name"
             ].nunique()
 
-            funnel["All Accounts"] = [targeted_all, reached_all, engaged_all]
+            # A funnel cannot narrow upwards: fewer accounts targeted than
+            # reached is arithmetically impossible and means one of the three
+            # figures doesn't describe what we think it does. Publishing it
+            # anyway puts a self-contradicting chart in front of a client, so
+            # the series is dropped and the contradiction reported instead.
+            if targeted_all is None or targeted_all < reached_all:
+
+                print(
+                    "\n[FUNNEL] 'All Accounts' series suppressed - the figures "
+                    "contradict each other."
+                )
+                print(
+                    f"         Targeted={targeted_all} but Reached={reached_all}; "
+                    "a funnel cannot reach more accounts than it targeted."
+                )
+                print(
+                    "         Check the Target Account List History export for "
+                    "this campaign - showing Trending only rather than an "
+                    "impossible chart.\n"
+                )
+
+            else:
+                funnel["All Accounts"] = [targeted_all, reached_all, engaged_all]
 
         self.tables["Account Funnel"] = funnel
+
+    @staticmethod
+    def _targeted_universe(history):
+
+        """
+        The size of the target account list, read as a value rather than a row
+        count.
+
+        This previously used `notna().sum()`, which counts rows. A Target
+        Account List History export carries one row per date (that is what
+        makes it a history, and why it also has New/Removed Accounts columns),
+        so counting rows returns the number of dates in the report and not the
+        number of accounts at all -- which is how a campaign came out with 651
+        targeted against 1,959 reached.
+
+        The largest value across the history is used: for a report covering the
+        campaign period, that is the widest the target list ever was, which is
+        what "accounts targeted" should mean over a reporting window. Reading
+        the latest row instead would understate it whenever accounts were
+        removed part-way through.
+        """
+
+        if "Accounts Targeted" not in getattr(history, "columns", []):
+            return None
+
+        values = pd.to_numeric(history["Accounts Targeted"], errors="coerce").dropna()
+
+        if values.empty:
+            return None
+
+        return int(values.max())
 
     def build_conversion_table(self):
 
