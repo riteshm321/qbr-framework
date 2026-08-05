@@ -31,6 +31,125 @@ COLUMN_ALIASES = {
 
 TOPIC_COLUMN = "Top MLI Topic (Average Over Last 7 Weeks)"
 
+# Domains that identify a person rather than an employer. Grouping accounts by
+# email domain would otherwise collapse every lead using a personal address
+# into a single enormous "account", so these fall back to the company name.
+# None appear in the exports seen so far (B2B lead gen), but one client's data
+# carrying them would badly distort every account figure in the deck.
+PERSONAL_EMAIL_DOMAINS = {
+    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "yahoo.co.in",
+    "hotmail.com", "hotmail.co.uk", "outlook.com", "live.com", "msn.com",
+    "aol.com", "icloud.com", "me.com", "mac.com", "protonmail.com", "proton.me",
+    "gmx.com", "gmx.de", "gmx.net", "web.de", "t-online.de", "orange.fr",
+    "free.fr", "libero.it", "yandex.com", "yandex.ru", "mail.com", "mail.ru",
+    "zoho.com", "qq.com", "163.com", "126.com", "naver.com",
+}
+
+
+def _email_domain(email):
+
+    text = str(email or "").strip().lower()
+
+    if "@" not in text:
+        return None
+
+    domain = text.rsplit("@", 1)[-1].strip()
+
+    if not domain or "." not in domain:
+        return None
+
+    if domain in PERSONAL_EMAIL_DOMAINS:
+        return None
+
+    return domain
+
+
+def canonicalise_accounts(leads):
+
+    """
+    Collapses company-name variants onto one account per email domain.
+
+    The Purchased Leads Report carries a free-text Company name, and the same
+    employer arrives spelled several ways -- "ALMAC" and "ALMAC Group",
+    "Alder Hey" and "Alder Hey Children's Hospital". Counting distinct names
+    therefore over-counts accounts: 878 for one campaign where the platform
+    reports 755, with 110 domains carrying more than one spelling.
+
+    The email domain is the reliable account key, and grouping on it reproduces
+    the platform exactly -- 755 accounts, and per-asset account counts summing
+    to 1,129, matching Asset Delivery Details' own totals asset for asset.
+
+    Each domain keeps one display name (the most frequent spelling, the longest
+    where frequency ties, so the fuller form wins) so slides still show real
+    company names rather than domains. Leads with no usable domain keep their
+    own name as their key, which leaves them counted separately rather than
+    silently merged.
+    """
+
+    if "Email" not in leads.columns or "Account Name" not in leads.columns:
+        return leads
+
+    domains = leads["Email"].map(_email_domain)
+
+    if domains.isna().all():
+        return leads
+
+    names = leads["Account Name"].astype(str).str.strip()
+
+    def canonical_name(group):
+
+        counts = group.value_counts()
+
+        top = counts.max()
+
+        # Longest among the equally-most-frequent spellings.
+        return max(
+            (name for name, n in counts.items() if n == top),
+            key=len,
+        )
+
+    canonical = (
+        names.groupby(domains).agg(canonical_name)
+        if domains.notna().any() else {}
+    )
+
+    # Two domains can land on the same display name -- one group trading under
+    # one name from two domains, e.g. "Fresenius Medical Care" from both
+    # fmc-ag.com and freseniusmedicalcare.com. The platform counts those as two
+    # accounts, so collapsing them onto one name would undercount by one per
+    # collision. The domain is appended to make the key distinct; the display
+    # layer strips a trailing "(domain.tld)" already, so slides still show the
+    # clean company name.
+    if len(canonical):
+
+        seen = {}
+
+        for domain in canonical.index:
+
+            name = canonical[domain]
+
+            if name in seen:
+                canonical[domain] = f"{name} ({domain})"
+            else:
+                seen[name] = domain
+
+    resolved = domains.map(canonical)
+
+    before = names.nunique()
+
+    # Rows without a usable domain keep their original name.
+    leads["Account Name"] = resolved.fillna(names)
+
+    after = leads["Account Name"].nunique()
+
+    if after != before:
+        print(
+            f"  [LEADS] {before:,} company-name spellings resolved to "
+            f"{after:,} accounts by email domain"
+        )
+
+    return leads
+
 
 def _attach_account_topics(leads, datasets):
 
@@ -119,6 +238,8 @@ def resolve(datasets):
             if source in leads.columns and target not in leads.columns
         }
     )
+
+    leads = canonicalise_accounts(leads)
 
     leads = _attach_account_topics(leads, datasets)
 
