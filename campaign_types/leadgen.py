@@ -192,19 +192,28 @@ class LeadGenAnalyzer:
         ]
 
     @staticmethod
-    def _group_by_calendar_quarter(months):
+    def _group_by_calendar_quarter(months, named=False):
 
         """Groups a chronological [(Period('M'), df), ...] list by the
         real calendar quarter each month falls in (Jan-Mar, Apr-Jun,
-        Jul-Sep, Oct-Dec), labeled sequentially Q1, Q2, ... in
-        chronological order. A quarter missing one of its 3 months
+        Jul-Sep, Oct-Dec). A quarter missing one of its 3 months
         (e.g. that month had zero leads and was skipped entirely) still
         forms one group from whichever real months belong to it --
         unlike a fixed 50/50 split, this reflects the actual number of
         real quarters the campaign spans, and unlike requiring 3
         strictly consecutive months, a gap (a skipped empty month)
         doesn't prevent the surrounding real months from being grouped
-        under their shared quarter."""
+        under their shared quarter.
+
+        Labels are sequential ("Q1", "Q2", ...) by default, which is what the
+        trend chart needs: its forecast continues the same numbering past the
+        last real point, so the axis reads Q1..Q7 without implying calendar
+        quarters that don't exist yet.
+
+        Pass named=True for real calendar labels ("Q2 2026") instead. The
+        comparison table wants those -- its columns are a fixed set of actual
+        periods with no forecast to continue, and a reader needs to know which
+        quarter each column is."""
 
         quarter_groups = {}
 
@@ -213,6 +222,12 @@ class LeadGenAnalyzer:
             key = (period.year, period.quarter)
 
             quarter_groups.setdefault(key, []).append(df)
+
+        if named:
+            return [
+                (f"Q{quarter} {year}", pd.concat(dfs))
+                for (year, quarter), dfs in quarter_groups.items()
+            ]
 
         return [
             (f"Q{i}", pd.concat(dfs))
@@ -540,35 +555,54 @@ class LeadGenAnalyzer:
 
             month_periods = self._constituent_month_periods(self.leads)
 
-            # "QoQ" framing only makes sense once there are at least 2
-            # real calendar quarters to compare -- the same calendar-
-            # quarter grouping the comparison table/chart and trend
-            # chart both use below, so this title never claims "QoQ"
-            # while those are actually showing something else.
-            real_quarters = len(self._group_by_calendar_quarter(month_periods))
-
-            detail_metrics_title = (
-                "Detailed QoQ Metrics & Optimization Status"
-                if real_quarters >= 2
-                else "Detailed Campaign Metrics & Optimization Status"
-            )
-
             slots = [self._slot(0, "Full Campaign", self.leads)]
 
+            # Full Campaign has one detail slide, so the comparison chart and
+            # table are the only place the period breakdown appears. What they
+            # break it into has to be comparable AND honestly named.
+            #
+            # Grouping into quarters below MIN_MONTHS_TO_GROUP does neither: a
+            # campaign running April to July puts three months in one bucket
+            # and one in the next, then labels them "Q1" and "Q2" -- generic
+            # names that match no real quarter, comparing a 3-month total
+            # against a 1-month total and reading as a collapse that is purely
+            # bucket size. Below that threshold each month is its own column:
+            # equal-length periods, named for what they actually are.
             if not month_periods:
+
                 comparison_slots = slots
-            elif len(month_periods) <= 3:
+                granularity = None
+
+            elif len(month_periods) < config.MIN_MONTHS_TO_GROUP:
+
                 comparison_slots = [
                     self._slot(i, period.strftime("%B %Y"), df)
                     for i, (period, df) in enumerate(month_periods)
                 ]
+                granularity = "month"
+
             else:
+
+                # Long enough for quarters to hold whole months. Named for the
+                # real calendar quarter rather than numbered sequentially, so a
+                # reader can tell which quarter each column is.
                 comparison_slots = [
                     self._slot(i, name, df)
                     for i, (name, df) in enumerate(
-                        self._group_by_calendar_quarter(month_periods)
+                        self._group_by_calendar_quarter(month_periods, named=True)
                     )
                 ]
+                granularity = "quarter"
+
+            # The title names whatever the table actually shows, so it can
+            # never claim "QoQ" over a set of monthly columns.
+            detail_metrics_title = {
+                "month": "Detailed Monthly Metrics & Optimization Status",
+                "quarter": "Detailed Quarter-over-Quarter Metrics & Optimization Status",
+            }.get(
+                granularity,
+                "Detailed Campaign Metrics & Optimization Status",
+            )
 
         elif mode in (MONTHLY, QUARTERLY):
 

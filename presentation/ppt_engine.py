@@ -597,18 +597,21 @@ class PowerPointEngine:
             # bars individually (one dPt per stage) -- that scheme no
             # longer fits now that the funnel can carry a second
             # "All Accounts" series alongside "Trending". Use one color
-            # per series instead (same approach as the comparison
-            # chart), and only show a legend once there's more than one
-            # series to distinguish.
+            # per series instead (same approach as the comparison chart).
             num_series = len(dataframe.columns) - 1
 
             self._recolor_series(chart, num_series)
 
-            chart.has_legend = num_series > 1
+            # Legend shown even for a single series. When the campaign has no
+            # Target Account List History export there is no "All Accounts"
+            # series to plot, and suppressing the legend left the chart with
+            # nothing saying the bars cover trending accounts only -- easily
+            # read as the whole account universe, and materially lower than the
+            # platform's own funnel for the same campaign.
+            chart.has_legend = True
 
-            if chart.has_legend:
-                chart.legend.position = XL_LEGEND_POSITION.BOTTOM
-                chart.legend.include_in_layout = False
+            chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+            chart.legend.include_in_layout = False
 
         # Comma-format every count shown directly on the chart itself
         # (data labels, value axis) so a 4+ digit number reads "1,234"

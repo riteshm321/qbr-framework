@@ -1282,21 +1282,29 @@ class PresentationData:
 
         funnel_chart = self.tables["Account Funnel"].copy()
 
+        # Renamed for the chart legend only -- the analyzer keeps the short
+        # "Trending" column name internally. Spelled out here because the
+        # legend is where a reader looks to find out what the bars count.
+        funnel_chart = funnel_chart.rename(
+            columns={"Trending": "Trending Accounts"}
+        )
+
         ppt["Chart_EngagementFunnel"] = funnel_chart
 
         # The funnel carries an "All Accounts" series only when a Target
         # Account List History report was supplied -- that is the only export
         # holding the full targeted universe. When it's absent the chart shows
-        # trending accounts alone, so the heading says so: a reader comparing
-        # this against the platform would otherwise assume the smaller figures
-        # were the whole picture rather than one of two series.
+        # trending accounts alone, and both the legend and this heading say so:
+        # without it the smaller figures read as the whole account universe,
+        # and would not reconcile against the platform's own funnel.
         if "All Accounts" in funnel_chart.columns:
             ppt["AI_EngagementHeading"] = (
                 "From intent-based targeting to active engagement"
             )
         else:
             ppt["AI_EngagementHeading"] = (
-                "Trending accounts only - from intent-based targeting to active engagement"
+                "From intent-based targeting to active engagement "
+                "(trending accounts only)"
             )
 
         # -------------------------------------------------
