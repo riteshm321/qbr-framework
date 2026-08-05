@@ -24,7 +24,10 @@ from openpyxl import load_workbook
 
 def _read_csv_rows(file):
 
-    with open(file, "r", encoding="utf-8", errors="ignore") as f:
+    # utf-8-sig, not utf-8: some exports (e.g. the Purchased Leads Report)
+    # begin with a byte-order mark, which utf-8 would leave glued to the
+    # first column name as "﻿Client Name" and break any lookup of it.
+    with open(file, "r", encoding="utf-8-sig", errors="ignore") as f:
         return list(csv.reader(f))
 
 
@@ -199,7 +202,7 @@ def load_csv(file):
         rows,
         file,
         reader=lambda f, skip, n: pd.read_csv(
-            f, skiprows=skip, nrows=n, encoding="utf-8", low_memory=False
+            f, skiprows=skip, nrows=n, encoding="utf-8-sig", low_memory=False
         )
     )
 

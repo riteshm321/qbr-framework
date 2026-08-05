@@ -27,9 +27,102 @@ class DateEngine:
     # Parse Date Column
     # -------------------------------------------------
 
+    # The Purchased Leads Report has no plain "Date" column -- when a lead
+    # counts is the date it was delivered to the client. Preferred in this
+    # order: the client delivery date is what the client was invoiced against,
+    # with the internal one as a fallback for exports missing it.
+    DELIVERED_DATE_COLUMNS = (
+        "Client Delivered Date",
+        "Internal Delivered Date",
+    )
+
+    # e.g. "Mon Apr 13 2026 08:51:51 GMT+0000 (Coordinated Universal Time)".
+    # The trailing timezone name in brackets defeats pandas' inference, so it
+    # is stripped and the rest parsed explicitly.
+    DELIVERED_DATE_FORMAT = "%a %b %d %Y %H:%M:%S GMT%z"
+
+    def adopt_delivered_date(self):
+
+        """
+        Creates a "Date" column from whichever delivered-date column exists, so
+        every downstream period split works on this report unchanged.
+
+        Some delivered leads have no delivery date recorded. Those rows are
+        given the date carried by the surrounding rows (forward-fill, then
+        back-fill for a gap at the very start), which places them in the
+        delivery run they belong to rather than dropping them -- dropping would
+        make the period figures sum to less than the campaign total. In the
+        exports seen so far every blank sits between two dates in the same
+        month, so this resolves them unambiguously.
+
+        Returns True when a Date column was created.
+        """
+
+        for column in self.DELIVERED_DATE_COLUMNS:
+
+            if column not in self.df.columns:
+                continue
+
+            cleaned = (
+                self.df[column]
+                .astype(str)
+                .str.replace(r"\s*\([^)]*\)\s*$", "", regex=True)
+                .str.strip()
+                .replace({"": None, "nan": None, "NaT": None, "None": None})
+            )
+
+            parsed = pd.to_datetime(
+                cleaned,
+                format=self.DELIVERED_DATE_FORMAT,
+                errors="coerce",
+                utc=True,
+            )
+
+            if parsed.notna().sum() == 0:
+                # Unexpected format -- let pandas try before giving up, so a
+                # future export style doesn't silently produce no dates.
+                parsed = pd.to_datetime(cleaned, errors="coerce", utc=True)
+
+            if parsed.notna().sum() == 0:
+                continue
+
+            missing = int(parsed.isna().sum())
+
+            # Timezone dropped, then truncated to midnight. Both matter:
+            # every window and period bound in this framework is a plain date,
+            # so a delivery timestamped 14:30 on the campaign's final day would
+            # otherwise fall outside a window ending at that day's 00:00 and be
+            # dropped from the count. Normalising makes this column match the
+            # day-level model used everywhere else.
+            parsed = parsed.dt.tz_convert(None).dt.normalize()
+
+            self.df["Date"] = parsed.ffill().bfill()
+
+            print(
+                f"  [LEADS] delivery dates read from '{column}'"
+                + (
+                    f"; {missing} lead(s) had no delivery date and were placed "
+                    "in the surrounding delivery run"
+                    if missing else ""
+                )
+            )
+
+            return True
+
+        return False
+
     def parse_dates(self):
 
         if "Date" not in self.df.columns:
+
+            if self.adopt_delivered_date():
+                # Already parsed to datetime above.
+                return
+
+        if "Date" not in self.df.columns:
+            return
+
+        if pd.api.types.is_datetime64_any_dtype(self.df["Date"]):
             return
 
         sample = str(

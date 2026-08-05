@@ -5,6 +5,7 @@ from constants import (
     TRENDING_ACCOUNTS,
     ASSET_DELIVERY,
     TARGET_ACCOUNT_HISTORY,
+    PURCHASED_LEADS,
     UNKNOWN
 )
 
@@ -16,6 +17,22 @@ def detect_dataset(df):
     """
 
     columns = set(df.columns)
+
+    # -----------------------------------------
+    # Purchased Leads (delivered leads)
+    #
+    # Checked before Lead Detail: this report also carries Job Title and
+    # Country, so the more specific signature has to win. "Lead ID" plus a
+    # delivered-date column is unique to it -- no other export identifies
+    # individual leads or records when they were handed to the client.
+    # -----------------------------------------
+
+    if {
+        "Lead ID",
+        "Client Delivered Date"
+    }.issubset(columns):
+
+        return PURCHASED_LEADS
 
     # -----------------------------------------
     # Lead Detail

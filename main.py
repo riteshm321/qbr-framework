@@ -71,6 +71,19 @@ for df in datasets.values():
         config.PROGRAM_NAME = report_metadata["Program"]
 
 # -------------------------------------------------------------
+# Decide which report the deck counts leads from. The Purchased
+# Leads Report records what was actually delivered to the client;
+# the Leads-by-day export includes refunded and non-delivered
+# activity and counts materially more. Must run before the period
+# resolver below, which detects the campaign window from the dates
+# present in the datasets.
+# -------------------------------------------------------------
+
+from core.lead_source import resolve as resolve_lead_source
+
+resolve_lead_source(datasets)
+
+# -------------------------------------------------------------
 # Ask the user which period(s) to analyze, then resolve that
 # choice into concrete date ranges using the data that was
 # actually loaded -- no reporting period is ever hardcoded.

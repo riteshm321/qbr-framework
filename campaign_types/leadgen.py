@@ -948,10 +948,24 @@ class LeadGenAnalyzer:
                 if not df.empty else ""
             })
 
+            # Guarded on the column's presence, not just on an empty frame:
+            # the Purchased Leads Report carries no topic column of its own
+            # (core/lead_source.py maps one on per account where a source for
+            # it exists, but that source isn't guaranteed).
+            topic_column = "Top MLI Topic (Average Over Last 7 Weeks)"
+
+            top_topic = ""
+
+            if not df.empty and topic_column in df.columns:
+
+                topic_mode = df[topic_column].mode()
+
+                if not topic_mode.empty:
+                    top_topic = topic_mode.iloc[0]
+
             rows.append({
                 "Metric": "Top Topic",
-                "Value": df["Top MLI Topic (Average Over Last 7 Weeks)"].mode().iloc[0]
-                if not df.empty else ""
+                "Value": top_topic
             })
 
             self.tables[f"{period_name} Summary"] = pd.DataFrame(rows)
