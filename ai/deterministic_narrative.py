@@ -17,6 +17,8 @@ with nothing to say (e.g. no trending topics for this campaign) says so
 explicitly rather than fabricating content.
 """
 
+from datetime import datetime
+
 
 # ------------------------------------------------------------
 # Small formatting helpers
@@ -78,6 +80,44 @@ def _direction(value):
         return "fell"
 
     return "held flat"
+
+
+def _magnitude(value):
+
+    """An adverb sized to the change, so a 3% drift and a 200% expansion don't
+    get described in identical language. Bands are deliberately wide -- the
+    exact figure is always printed alongside, so this only has to set tone."""
+
+    size = abs(_num(value))
+
+    if size == 0:
+        return ""
+
+    if size < 5:
+        return "marginally"
+
+    if size < 25:
+        return "moderately"
+
+    if size < 75:
+        return "sharply"
+
+    return "dramatically"
+
+
+def _movement(value):
+
+    """"fell sharply" / "grew moderately" / "held flat" -- the direction and
+    its magnitude as one phrase."""
+
+    word = _direction(value)
+
+    adverb = _magnitude(value)
+
+    if not adverb or word == "held flat":
+        return word
+
+    return f"{word} {adverb}"
 
 
 def _rows_by(rows, key):
@@ -191,6 +231,306 @@ class DeterministicNarrativeBuilder:
 
         return None
 
+    # --------------------------------------------------------
+    # Derived observations
+    #
+    # The difference between narrative that describes and narrative that
+    # informs. Each observation is a thing worth pointing out that is NOT
+    # simply a figure already printed on the slide -- a divergence between two
+    # metrics, where a trajectory turned, whether concentration is a risk,
+    # which funnel step actually leaks. Every one is guarded so it only
+    # appears when the data genuinely supports it, so a campaign with a clean
+    # growth story and one in trouble surface completely different points.
+    #
+    # Sections draw from this ranked list rather than each re-deriving its
+    # own, which is what keeps the executive summary, key learnings and
+    # conclusion consistent with one another.
+    # --------------------------------------------------------
+
+    def _observations(self):
+
+        found = []
+
+        status = {r.get("Metric"): r for r in self.metric_status}
+
+        leads = status.get("Total Leads")
+        accounts = status.get("Unique Accounts")
+
+        lead_pct = _num(leads.get("% Change")) if leads else None
+        account_pct = _num(accounts.get("% Change")) if accounts else None
+
+        # 1. Reach and volume moving in opposite directions is the single most
+        #    diagnostic thing a lead-gen campaign can show: it separates "not
+        #    enough audience" from "audience isn't converting".
+        if lead_pct is not None and account_pct is not None:
+
+            if lead_pct < 0 < account_pct:
+                found.append((
+                    100,
+                    "Reach outpaced conversion",
+                    f"Account reach grew {_abs_pct(account_pct)} while lead volume "
+                    f"fell {_abs_pct(lead_pct)}, so the audience is widening faster "
+                    "than it converts.",
+                ))
+
+            elif account_pct < 0 < lead_pct:
+                found.append((
+                    100,
+                    "Depth beat breadth",
+                    f"Lead volume grew {_abs_pct(lead_pct)} even as account reach "
+                    f"fell {_abs_pct(account_pct)}, so existing accounts are "
+                    "converting harder.",
+                ))
+
+            elif lead_pct < 0 and account_pct < 0:
+                found.append((
+                    95,
+                    "Volume and reach both softened",
+                    f"Leads fell {_abs_pct(lead_pct)} and accounts "
+                    f"{_abs_pct(account_pct)} together, pointing at supply rather "
+                    "than conversion.",
+                ))
+
+            elif lead_pct > 0 and account_pct > 0:
+                found.append((
+                    95,
+                    "Growth on both fronts",
+                    f"Leads grew {_abs_pct(lead_pct)} and account reach "
+                    f"{_abs_pct(account_pct)}, so volume and audience compounded "
+                    "together.",
+                ))
+
+        # 2. Where the peak sits tells you whether this is a campaign losing
+        #    steam, warming up, or still climbing -- three very different
+        #    conversations to have with a client.
+        entries = [e for e in self.breakdown if e.get("Total Leads") is not None]
+
+        if len(entries) >= 3:
+
+            peak = max(entries, key=lambda e: _num(e.get("Total Leads")))
+            position = entries.index(peak)
+
+            if position == len(entries) - 1:
+                found.append((
+                    90,
+                    "Momentum is building",
+                    f"{peak['Period']} was the strongest period yet, so the "
+                    "campaign is still climbing.",
+                ))
+
+            elif position == 0:
+                found.append((
+                    90,
+                    "Front-loaded performance",
+                    f"{peak['Period']} opened as the strongest period and nothing "
+                    "since has matched it.",
+                ))
+
+            else:
+                found.append((
+                    90,
+                    f"{peak['Period']} was the turning point",
+                    f"Volume peaked in {peak['Period']} at "
+                    f"{_count(peak.get('Total Leads'))} leads and has trended down "
+                    "since.",
+                ))
+
+        # 3. Periods with no data at all are easy to miss on a chart that
+        #    simply omits them, and they change how every average reads.
+        gaps = self._coverage_gaps()
+
+        if gaps:
+            found.append((
+                85,
+                "Coverage had gaps",
+                f"{_join_and(gaps)} produced no leads at all, so activity was not "
+                "continuous across the period.",
+            ))
+
+        # 4. Concentration risk -- one asset carrying the campaign is fragile
+        #    even when the headline numbers look healthy.
+        top_asset, top_share = self._top_asset_share()
+
+        if top_share is not None and top_share >= 30:
+            found.append((
+                80,
+                "One asset carries the campaign",
+                f"'{top_asset}' alone drives {top_share:.1f}% of all leads, so "
+                "performance depends heavily on a single piece of content.",
+            ))
+
+        elif top_share is not None and top_share <= 20:
+            found.append((
+                60,
+                "Content load is well spread",
+                f"No single asset exceeds {top_share:.1f}% of leads, so no one "
+                "piece of content is carrying undue weight.",
+            ))
+
+        # 5. Which funnel step leaks hardest is where the next intervention
+        #    should go, and it is not always the obvious one.
+        conversion = _rows_by(self.package.get("Account Conversion", []) or [], "Conversion")
+
+        reach_rate = conversion.get("Reached / Targeted", {}).get("Rate")
+        engage_rate = conversion.get("Engaged / Reached", {}).get("Rate")
+
+        if reach_rate is not None and engage_rate is not None:
+
+            if _num(engage_rate) < _num(reach_rate):
+                found.append((
+                    75,
+                    "Engagement is the bottleneck",
+                    f"{reach_rate}% of targeted accounts were reached but only "
+                    f"{engage_rate}% of those engaged, so contact is easier than "
+                    "interest.",
+                ))
+            else:
+                found.append((
+                    75,
+                    "Reach is the bottleneck",
+                    f"Only {reach_rate}% of targeted accounts were reached, yet "
+                    f"{engage_rate}% of those engaged once contacted.",
+                ))
+
+        # 6. A large ready-now pool is the most actionable thing in the deck,
+        #    and it is worth sizing as a share rather than a bare count.
+        ready, ready_share = self._sales_ready_share()
+
+        if ready:
+            share_text = f", {ready_share:.0f}% of those identified" if ready_share else ""
+
+            found.append((
+                70,
+                "A sales-ready pool is waiting",
+                f"{ready} accounts already sit in Consideration or Decision"
+                f"{share_text}, ready for outreach now.",
+            ))
+
+        # 7. Breadth expanding across several dimensions at once is a real
+        #    finding, distinct from any single metric's movement.
+        growth = [
+            r["Metric"].lower() for r in self.metric_status
+            if _num(r.get("% Change")) > 0
+        ]
+
+        if len(growth) >= 3:
+            found.append((
+                65,
+                "Breadth expanded on every front",
+                f"{_lead_upper(_join_and(growth))} all grew together, widening "
+                "the campaign's footprint.",
+            ))
+
+        found.sort(key=lambda item: -item[0])
+
+        return [
+            {"title": title, "detail": detail}
+            for _, title, detail in found
+        ]
+
+    def _coverage_gaps(self):
+
+        """Months inside the reporting window that produced no leads at all.
+
+        DateEngine skips an empty month entirely, so it never reaches the
+        breakdown -- a gap can only be found by diffing what the window
+        implies against what is actually present.
+
+        Chronology comes from each period's real Start date rather than from
+        ordering month names, because a campaign that crosses a year boundary
+        (say May 2025 to January 2026) has "January" sorting before "May" by
+        name while falling after it in time. Comparing (year, month) pairs
+        makes that case work instead of having to bail out of it.
+
+        Returns nothing for modes whose periods aren't months -- a missing
+        quarter is a different, much less likely observation, and inferring
+        one from quarter labels isn't worth the risk of being wrong.
+        """
+
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December",
+        ]
+
+        dated = []
+
+        for entry in self.breakdown:
+
+            if entry.get("Period") not in month_names or not entry.get("Start"):
+                continue
+
+            try:
+                start = datetime.strptime(entry["Start"], "%d %b %Y")
+
+            except (ValueError, TypeError):
+                # An unexpected date format means we can't establish
+                # chronology safely, so make no claim about gaps.
+                return []
+
+            dated.append((start.year, start.month))
+
+        if len(dated) < 2:
+            return []
+
+        dated.sort()
+
+        present = set(dated)
+
+        year, month = dated[0]
+        end_year, end_month = dated[-1]
+
+        gaps = []
+
+        while (year, month) < (end_year, end_month):
+
+            month += 1
+
+            if month > 12:
+                month = 1
+                year += 1
+
+            if (year, month) >= (end_year, end_month):
+                break
+
+            if (year, month) not in present:
+                gaps.append(month_names[month - 1])
+
+        return gaps
+
+    def _top_asset_share(self):
+
+        contribution = self.package.get("Asset Contribution", []) or []
+
+        if not contribution:
+            return None, None
+
+        top = max(contribution, key=lambda r: _num(r.get("Contribution %")))
+
+        return top.get("Asset Name"), _num(top.get("Contribution %"))
+
+    def _sales_ready_share(self):
+
+        by_metric = self._value_add_lookup()
+
+        ready = by_metric.get("Sales-Ready Accounts", {}).get("Value")
+        identified = by_metric.get("Accounts Identified", {}).get("Value")
+
+        if not ready:
+            return None, None
+
+        def as_number(text):
+            try:
+                return float(str(text).replace(",", ""))
+            except (TypeError, ValueError):
+                return 0
+
+        ready_n = as_number(ready)
+        identified_n = as_number(identified)
+
+        share = (ready_n / identified_n * 100) if identified_n else None
+
+        return ready, share
+
     def _peak_and_last(self, metric):
 
         """(peak_entry, last_entry) across the granular breakdown, used to
@@ -215,61 +555,50 @@ class DeterministicNarrativeBuilder:
         leads = self._overall("Total Leads")
         accounts = self._overall("Unique Accounts")
         countries = self._overall("Countries")
+        assets = self._overall("Assets Used")
 
         short = (
             f"{_count(leads)} leads from {_count(accounts)} accounts "
             f"across {_count(countries)} countries."
         )
 
-        status = self._sorted_status()
-
-        growth = [r for r in status if _num(r.get("% Change")) > 0]
-        decline = [r for r in status if _num(r.get("% Change")) < 0]
-
         range_text = self.reporting_period.get("Overall Range", "")
 
-        long_parts = [
+        # Opens with the scale of what was delivered, then hands straight to
+        # the sharpest observation rather than listing every metric's movement
+        # -- an executive summary that recites the metrics table adds nothing
+        # the reader cannot already see.
+        opening = (
             f"The campaign delivered {_count(leads)} leads from "
             f"{_count(accounts)} unique accounts"
             + (f" across {_count(countries)} countries" if countries else "")
-            + (f" between {range_text}" if range_text else "")
+            + (f", {range_text}" if range_text else "")
             + "."
-        ]
+        )
 
-        if growth:
-            names = ", ".join(r["Metric"].lower() for r in growth[:3])
-            long_parts.append(f"Strong growth was seen in {names}.")
+        observations = self._observations()
 
-        if decline:
-            names = " and ".join(r["Metric"].lower() for r in decline[:2])
-            pct = min(_num(r.get("% Change")) for r in decline)
-            long_parts.append(
-                f"However, {names} declined, down as much as {abs(pct):.2f}%, "
-                "signaling areas for optimization."
-            )
+        long_parts = [opening]
 
-        bullets = [
-            f"{_count(leads)} leads delivered from {_count(accounts)} unique accounts.",
-        ]
+        for observation in observations[:2]:
+            long_parts.append(observation["detail"])
 
-        if growth:
+        # Distinct facts, not a restatement of the paragraph above.
+        bullets = []
+
+        if assets:
             bullets.append(
-                "Strong growth in "
-                + ", ".join(r["Metric"].lower() for r in growth[:3])
-                + "."
+                f"{_count(assets)} assets in market reaching "
+                f"{_count(self._overall('Job Titles'))} distinct job titles."
             )
 
-        if decline:
-            bullets.append(
-                "Decline in "
-                + " and ".join(r["Metric"].lower() for r in decline[:2])
-                + " needs attention."
-            )
+        for observation in observations[:3]:
+            bullets.append(f"{observation['title']}.")
 
         return {
             "short": short,
             "long": " ".join(long_parts),
-            "bullets": bullets,
+            "bullets": bullets[:4],
         }
 
     # --------------------------------------------------------
@@ -293,20 +622,43 @@ class DeterministicNarrativeBuilder:
 
         peak, last = self._peak_and_last("Total Leads")
 
-        bullets = [f"{len(self.breakdown)} periods analysed using {_count(assets)} assets."]
+        bullets = []
 
-        if peak is not None and last is not None:
-            if peak["Period"] == last["Period"]:
+        # Averages give the reader a sense of scale per period that the totals
+        # alone don't -- and immediately show how uneven delivery was.
+        volumes = [
+            _num(e.get("Total Leads")) for e in self.breakdown
+            if e.get("Total Leads") is not None
+        ]
+
+        if len(volumes) > 1:
+            average = sum(volumes) / len(volumes)
+
+            bullets.append(
+                f"{len(volumes)} periods analysed, averaging "
+                f"{_count(average)} leads each."
+            )
+
+            spread = max(volumes) - min(volumes)
+
+            if average and spread / average > 0.5:
                 bullets.append(
-                    f"Volume was highest in the most recent period, {peak['Period']}."
-                )
-            else:
-                bullets.append(
-                    f"Volume peaked in {peak['Period']} and moved to "
-                    f"{_count(last.get('Total Leads'))} leads by {last['Period']}."
+                    f"Delivery was uneven, ranging from {_count(min(volumes))} "
+                    f"to {_count(max(volumes))} leads per period."
                 )
 
-        return {"summary": summary, "bullets": bullets}
+        elif assets:
+            bullets.append(
+                f"Delivered through {_count(assets)} assets across the period."
+            )
+
+        if peak is not None and last is not None and peak["Period"] != last["Period"]:
+            bullets.append(
+                f"Volume peaked in {peak['Period']} and closed at "
+                f"{_count(last.get('Total Leads'))} leads in {last['Period']}."
+            )
+
+        return {"summary": summary, "bullets": bullets[:3]}
 
     # --------------------------------------------------------
     # PeriodAnalysis
@@ -395,10 +747,14 @@ class DeterministicNarrativeBuilder:
         growth = [r for r in status if _num(r.get("% Change")) > 0]
         decline = [r for r in status if _num(r.get("% Change")) < 0]
 
+        # Names the metrics on each side rather than saying "and related
+        # metrics", which was vague and could imply a grouping the data
+        # doesn't actually support.
         if decline and growth:
             headline = (
-                f"{growth[-1]['Metric']} and related reach metrics grew while "
-                f"{decline[0]['Metric'].lower()} declined."
+                f"{_lead_upper(_join_and([r['Metric'].lower() for r in growth]))} "
+                f"grew while {_join_and([r['Metric'].lower() for r in decline])} "
+                "declined."
             )
         elif decline:
             headline = "Every tracked metric declined across the periods compared."
@@ -406,6 +762,17 @@ class DeterministicNarrativeBuilder:
             headline = "Every tracked metric grew across the periods compared."
         else:
             headline = "Metrics held broadly flat across the periods compared."
+
+        # The summary interprets; the bullets carry the two headline figures.
+        # Bullet 1 must stay the overall line and bullets 2 and 3 must cover
+        # Total Leads then Unique Accounts in that order -- they sit directly
+        # under those two percentage figures on the slide.
+        summary = headline
+
+        observations = self._observations()
+
+        if observations:
+            summary = observations[0]["detail"]
 
         bullets = [headline]
 
@@ -417,12 +784,12 @@ class DeterministicNarrativeBuilder:
                 continue
 
             bullets.append(
-                f"{metric} {_direction(row.get('% Change'))} "
-                f"{_abs_pct(row.get('% Change'))}."
+                f"{metric} {_movement(row.get('% Change'))} by "
+                f"{_abs_pct(row.get('% Change'))} across the periods compared."
             )
 
         return {
-            "summary": headline,
+            "summary": summary,
             "bullets": bullets[:3],
         }
 
@@ -760,66 +1127,35 @@ class DeterministicNarrativeBuilder:
 
     def key_learnings(self):
 
-        items = []
+        # Straight from the ranked observations -- this slide exists to say
+        # what the campaign taught us, which is exactly what an observation
+        # is. Topping up from the metrics table only if fewer than five
+        # observations fired (a very short or very flat campaign).
+        items = [
+            {"title": observation["title"], "detail": observation["detail"]}
+            for observation in self._observations()
+        ]
 
-        status = self._sorted_status()
+        if len(items) < 5:
 
-        if status:
+            existing = {item["title"] for item in items}
 
-            worst = status[0]
-            best = status[-1]
+            for row in self._sorted_status():
 
-            if _num(worst.get("% Change")) < 0:
+                title = f"{row['Metric']} {_direction(row.get('% Change'))}"
+
+                if title in existing:
+                    continue
+
                 items.append({
-                    "title": f"{worst['Metric']} needs attention",
-                    "detail": f"{worst['Metric']} {_direction(worst.get('% Change'))} "
-                              f"{_abs_pct(worst.get('% Change'))} across the periods compared.",
+                    "title": title,
+                    "detail": f"{row['Metric']} {_movement(row.get('% Change'))} by "
+                              f"{_abs_pct(row.get('% Change'))} across the periods "
+                              "compared.",
                 })
 
-            if _num(best.get("% Change")) > 0:
-                items.append({
-                    "title": f"{best['Metric']} is a strength",
-                    "detail": f"{best['Metric']} grew {_abs_pct(best.get('% Change'))}, "
-                              "the campaign's strongest mover.",
-                })
-
-        assets = self.package.get("Asset Performance", []) or []
-        contribution = _rows_by(self.package.get("Asset Contribution", []) or [], "Asset Name")
-
-        if assets:
-
-            top = min(assets, key=lambda r: _num(r.get("Rank", 999)))
-
-            top_pct = contribution.get(top.get("Asset Name"), {}).get("Contribution %")
-
-            if top_pct:
-                items.append({
-                    "title": "One asset dominates",
-                    "detail": f"'{top.get('Asset Name')}' alone contributes "
-                              f"{top_pct:.1f}% of all leads generated.",
-                })
-
-        conversion = _rows_by(self.package.get("Account Conversion", []) or [], "Conversion")
-
-        engaged = conversion.get("Engaged / Reached", {}).get("Rate")
-
-        if engaged is not None:
-            items.append({
-                "title": "Engagement is the constraint",
-                "detail": f"Only {engaged}% of reached accounts went on to engage "
-                          "with the campaign's content.",
-            })
-
-        by_metric = self._value_add_lookup()
-
-        sales_ready = by_metric.get("Sales-Ready Accounts", {})
-
-        if sales_ready.get("Value"):
-            items.append({
-                "title": "A sales-ready pool exists",
-                "detail": f"{sales_ready.get('Value')} accounts already sit in "
-                          "Consideration or Decision, ready for outreach now.",
-            })
+                if len(items) >= 5:
+                    break
 
         return {"items": items[:5]}
 
@@ -829,46 +1165,108 @@ class DeterministicNarrativeBuilder:
 
     def executive_conclusion(self):
 
+        """The closing "so what".
+
+        Every clause is derived from the actual mix of movements. An earlier
+        version opened with a fixed "Reach expanded while N metrics declined",
+        which contradicted itself on a campaign where everything declined
+        (reach had not expanded) and asserted growth on a single-period run
+        that had no comparison data to support any claim at all.
+        """
+
         status = self._sorted_status()
 
         decline = [r for r in status if _num(r.get("% Change")) < 0]
+        growth = [r for r in status if _num(r.get("% Change")) > 0]
 
-        by_metric = self._value_add_lookup()
+        sales_ready, _ = self._sales_ready_share()
 
-        sales_ready = by_metric.get("Sales-Ready Accounts", {}).get("Value")
-
-        if decline and sales_ready:
-            summary = (
-                f"Reach expanded while {_plural(len(decline), 'metric')} declined; "
+        # The action half of the sentence -- always the most concrete next
+        # step available, falling back progressively.
+        if sales_ready:
+            action = (
                 f"converting the {sales_ready} sales-ready accounts is the "
-                "fastest route back to performance."
-            )
-        elif sales_ready:
-            summary = (
-                f"Performance grew across every metric; converting the "
-                f"{sales_ready} sales-ready accounts is the next opportunity."
+                "clearest next step"
             )
         else:
-            summary = "The campaign's next priority is converting existing reach into pipeline."
+            action = "converting existing reach into pipeline is the next priority"
 
-        return {"summary": summary}
+        # The assessment half, strictly from what the comparison shows.
+        if not status:
+            assessment = "With a single period analysed there is no prior period to compare against"
+
+        elif decline and growth:
+            assessment = (
+                f"{_lead_upper(_join_and([r['Metric'].lower() for r in growth]))} "
+                f"grew while {_join_and([r['Metric'].lower() for r in decline])} fell"
+            )
+
+        elif decline:
+            assessment = f"All {len(decline)} tracked metrics declined"
+
+        else:
+            assessment = f"All {len(growth)} tracked metrics grew"
+
+        return {"summary": f"{assessment}; {action}."}
 
     def speaker_notes(self):
+
+        """A talk track, not a metrics recital.
+
+        These notes are for whoever presents the deck, so they say what to
+        lead with, what to be ready to be challenged on, and where to land --
+        the figures are already on the slides, and repeating them here in a
+        flat list gives the presenter nothing to work with.
+        """
 
         leads = self._overall("Total Leads")
         accounts = self._overall("Unique Accounts")
 
-        status = self._sorted_status()
+        observations = self._observations()
 
         notes = [
-            f"{_count(leads)} leads from {_count(accounts)} accounts across "
-            f"{self.reporting_period.get('Overall Range', '')}."
+            f"Open with the scale: {_count(leads)} leads from "
+            f"{_count(accounts)} accounts, "
+            f"{self.reporting_period.get('Overall Range', 'the period analysed')}."
         ]
 
-        for row in status:
+        if observations:
+            notes.append(f"Lead on this: {_lead_lower(observations[0]['detail'])}")
+
+        # Declines are what a client will interrupt about, so name them ahead
+        # of time rather than leaving the presenter to find them mid-slide.
+        decline = [
+            r for r in self._sorted_status()
+            if _num(r.get("% Change")) < 0
+        ]
+
+        if decline:
+            names = _join_and([r["Metric"].lower() for r in decline])
+
             notes.append(
-                f"{row['Metric']} {_direction(row.get('% Change'))} "
-                f"{_abs_pct(row.get('% Change'))}."
+                f"Expect questions on {names} -- address the drop directly "
+                "rather than leading with the positives."
+            )
+        else:
+            notes.append(
+                "Every tracked metric moved in the right direction, so the "
+                "conversation can focus on where to scale next."
+            )
+
+        gaps = self._coverage_gaps()
+
+        if gaps:
+            notes.append(
+                f"Flag {_join_and(gaps)} as having no recorded activity before "
+                "anyone spots the gap on the chart."
+            )
+
+        ready, _ = self._sales_ready_share()
+
+        if ready:
+            notes.append(
+                f"Close on the {ready} sales-ready accounts -- that is the "
+                "concrete next step to agree in the room."
             )
 
         return {"notes": " ".join(notes)}
