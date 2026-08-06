@@ -9,6 +9,10 @@ import re
 import textwrap
 import pandas as pd
 
+# The geography section's divider wording, shared by the divider slide and the
+# agenda line that points at it so the two can't drift apart.
+GEOGRAPHY_SECTION_TITLE = "Where the Leads Are: Market-by-Market Breakdown"
+
 class PresentationData:
 
     def __init__(self):
@@ -138,6 +142,72 @@ class PresentationData:
             return f"{value:g}%"
         except (TypeError, ValueError):
             return value
+
+    def markets(self):
+
+        """
+        The country breakdown backing the geography slides, or an empty frame.
+
+        Built by the analyzer from the whole campaign rather than the selected
+        window -- see LeadGenAnalyzer.build_country_distribution.
+        """
+
+        table = self.tables.get("Country Distribution")
+
+        if table is None or table.empty:
+            return pd.DataFrame(columns=["Country", "Leads", "Share %", "Tier"])
+
+        return table
+
+    @staticmethod
+    def real_markets(table):
+
+        """
+        The rows that name an actual country.
+
+        A campaign selling into more markets than the slide has cards gets a
+        combined "Other (N countries)" remainder row. It is a total, not a
+        place: it can never be called the leading market, counted as a growth
+        market, or described as anywhere.
+        """
+
+        return table[
+            ~table["Country"].astype(str).str.startswith("Other (")
+        ]
+
+    @classmethod
+    def shorten_market(cls, name):
+
+        """
+        A country name short enough for a market card's name box.
+
+        Reports name countries as the platform does, qualifiers and all --
+        "United Kingdom (Great Britain)". The box holds roughly 16 bold
+        characters, so the raw value truncates to "United Kingdom (Great...",
+        which reads as a fault. Dropping the parenthetical leaves the name
+        itself intact, which is what the card is there to show; the general
+        shortener still applies to anything long enough to need it.
+        """
+
+        name = re.sub(r"\s*\([^)]*\)", "", str(name or "")).strip()
+
+        return cls.shorten_entity(name, limit=22)
+
+    @staticmethod
+    def join_and(items):
+
+        """"a", "a and b", "a, b and c" -- a readable list, whatever its
+        length."""
+
+        items = [str(item) for item in items if str(item).strip()]
+
+        if not items:
+            return ""
+
+        if len(items) == 1:
+            return items[0]
+
+        return f"{', '.join(items[:-1])} and {items[-1]}"
 
     @staticmethod
     def pluralize_country(count):
@@ -411,12 +481,28 @@ class PresentationData:
         # Agenda: fixed items around the period-specific performance
         # section(s), which vary in number and wording with the mode.
 
+        # The geography section is dropped from the deck when the campaign
+        # delivered into a single market, so its agenda line has to go with
+        # it -- an agenda promising a market breakdown that no slide delivers
+        # is worse than not listing it.
+        #
+        # The divider's own text is left alone rather than set from here: its
+        # shape shares a name with the insights divider earlier in the deck,
+        # so writing to that name would retitle the wrong slide. The wording
+        # below is a copy of what the divider already says.
+        geography_agenda = (
+            [GEOGRAPHY_SECTION_TITLE] if len(self.markets()) > 1 else []
+        )
+
         ppt["Text Placeholder 1"] = (
             ["Executive Summary", "Campaign Snapshot"]
             + periods.get("agenda_items", ["Campaign Performance"])
             + [
                 periods.get("comparison_label", "Comparative Analysis"),
                 "Content, Audience & Intent Insights",
+            ]
+            + geography_agenda
+            + [
                 "Key Learnings & Optimization Highlights",
                 "Momentum & Forward Outlook",
                 "Value-Add Lead Impact Summary",
@@ -669,7 +755,25 @@ class PresentationData:
             "text": "Recommended Next Steps",
         }
 
-        for i in range(5):
+        # A sixth action is appended (by PowerPointEngine.clone_paragraphs)
+        # whenever the campaign has a market breakdown to act on, so the
+        # geography section ends in something to do rather than just
+        # something observed.
+        recommendation_count = 6 if len(self.markets()) > 1 else 5
+
+        for i in range(recommendation_count):
+
+            # Run 0 is the bold "01   " prefix. It is written rather than left
+            # alone because the sixth paragraph is a copy of the fifth and
+            # arrives carrying its number -- two lines reading "05". Writing
+            # every prefix from the loop index keeps them in sequence however
+            # many actions the campaign ends up with.
+            ppt[f"AI_H2Recommendation{i + 1}_number"] = {
+                "object": "AI_H2Recommendations",
+                "paragraph_index": i + 1,
+                "run_index": 0,
+                "text": f"{i + 1:02d}   ",
+            }
 
             ppt[f"AI_H2Recommendation{i + 1}"] = {
                 "object": "AI_H2Recommendations",
@@ -807,26 +911,6 @@ class PresentationData:
         # Slide 18 - engagement funnel
         bulleted("AI_EngagementSummary", engagement.get("bullets", []), 125)
 
-        # Geographic distribution -- a slide cloned from the funnel at build
-        # time (see PowerPointEngine.add_country_slide), so its boxes carry the
-        # same "label + blank + 3 lines" structure the helper above expects.
-        geography = self.ai.get("geography", {}) or {}
-
-        ppt["TITLE_CountryDistribution"] = "Geographic Distribution"
-
-        ppt["AI_CountryHeading"] = self.clip(geography.get("heading"), 95)
-
-        # Paragraph 0 is the card's own bold label, inherited from the funnel
-        # card as "FUNNEL READ" -- it has to be rewritten or the new slide
-        # carries the donor slide's caption.
-        ppt["AI_CountrySummary_label"] = {
-            "object": "AI_CountrySummary",
-            "paragraph_index": 0,
-            "text": "GEOGRAPHIC READ",
-        }
-
-        bulleted("AI_CountrySummary", geography.get("bullets", []), 125)
-
         # Slide 19 - top accounts / intent tables
         ppt["AI_TopAccountsFooter"] = self.clip(top_accounts.get("footer"), 135)
 
@@ -839,7 +923,13 @@ class PresentationData:
         # rather than as list formatting, so the number is rebuilt here.
         items = learnings.get("items", []) or []
 
-        for i in range(5):
+        # A sixth pair is appended (by PowerPointEngine.clone_paragraphs)
+        # whenever the campaign has a market breakdown, so what geography
+        # taught us sits alongside the other learnings rather than only on
+        # its own slides.
+        learning_count = 6 if len(self.markets()) > 1 else 5
+
+        for i in range(learning_count):
 
             item = items[i] if i < len(items) and isinstance(items[i], dict) else {}
 
@@ -1344,20 +1434,169 @@ class PresentationData:
         ppt["Chart_BuyingStage"] = buying_stage_chart
 
         # -------------------------------------------------
-        # GEOGRAPHIC DISTRIBUTION
+        # GEOGRAPHY SECTION (divider + market cards + market KPIs)
         #
-        # Largest market last: a horizontal bar chart plots the first category
-        # at the bottom, so reversing puts the biggest bar at the top where a
-        # reader looks first.
+        # These three slides always describe the WHOLE campaign, whichever
+        # period the user selected: where a campaign sells is a structural
+        # fact about it, not a property of the quarter being reviewed. Their
+        # own date line says so, so nothing here reads from the selected
+        # window.
+        #
+        # Every figure is computed from the country breakdown -- market count,
+        # names, shares, tiers and concentration all follow whatever the
+        # campaign delivered. Nothing on these slides is written for a
+        # particular client.
         # -------------------------------------------------
 
-        country = self.tables.get("Country Distribution")
+        markets = self.markets()
 
-        if country is not None and not country.empty:
+        named_markets = self.real_markets(markets)
 
-            country_chart = country[["Country", "Leads"]].iloc[::-1].copy()
+        if len(markets) > 1 and not named_markets.empty:
 
-            ppt["Chart_CountryDistribution"] = country_chart
+            geography = self.ai.get("geography", {}) or {}
+
+            total_leads = int(markets["Leads"].sum())
+
+            top = named_markets.iloc[0]
+
+            top_two_share = float(named_markets["Share %"].head(2).sum())
+
+            growth_markets = int(
+                (named_markets["Tier"] == "Growth Opportunity").sum()
+            )
+
+            market_names = [
+                self.shorten_market(name)
+                for name in named_markets["Country"].tolist()
+            ]
+
+            # Every country the campaign delivered into, which is not the same
+            # as the number of cards: a campaign in more markets than the
+            # slide can name has its tail folded into one combined card, and
+            # "Markets Tracked" still has to report the real figure.
+            total_markets = markets.attrs.get(
+                "total_markets", len(named_markets)
+            )
+
+            ppt["TITLE_GeographyMarkets"] = "Market Dominance & Growth Potential"
+
+            ppt["TITLE_GeographyPipeline"] = (
+                "Pipeline Geography: Understanding Market Concentration"
+            )
+
+            # The whole campaign, not the selected window -- see above.
+            ppt["GEO_Period"] = periods.get("overall_range", "")
+
+            # ---- Market cards ------------------------------------------
+            #
+            # Three lines each: the lead count, the share, and the tier that
+            # share earns. Cards past the last market are deleted by the
+            # engine rather than blanked, so nothing is written for them.
+
+            for position, (_, row) in enumerate(markets.iterrows(), start=1):
+
+                ppt[f"GEO_Market{position}_Name"] = self.shorten_market(
+                    row["Country"]
+                )
+
+                for line, text in enumerate((
+                    f"{self.format_count(int(row['Leads']))} leads",
+                    f"{row['Share %']:.1f}%",
+                    row["Tier"],
+                )):
+
+                    ppt[f"GEO_Market{position}_Detail_p{line}"] = {
+                        "object": f"GEO_Market{position}_Detail",
+                        "paragraph_index": line,
+                        "text": text,
+                    }
+
+            # The lead-in line above the cards: AI-written, with a computed
+            # sentence stating the same facts when no provider answered.
+            tail_names = market_names[2:]
+
+            computed_intro = (
+                f"Distribution of {self.format_count(total_leads)} total leads "
+                f"across {total_markets} "
+                f"{self.pluralize_country(total_markets).lower()}. "
+                f"{market_names[0]} leads the pipeline"
+                + (
+                    f", {market_names[1]} is the strongest secondary market"
+                    if len(market_names) > 1 else ""
+                )
+                + (
+                    f", and {self.join_and(tail_names)} "
+                    f"{'represents' if len(tail_names) == 1 else 'represent'} "
+                    "emerging growth potential."
+                    if tail_names else "."
+                )
+            )
+
+            ppt["AI_GeographyIntro"] = self.at_least(
+                self.clip(geography.get("heading"), 215), 8, computed_intro
+            )
+
+            # ---- Concentration KPIs ------------------------------------
+
+            geo_cards = [
+                (
+                    self.format_count(total_leads),
+                    f"Total Leads across {total_markets} "
+                    f"{'market' if total_markets == 1 else 'markets'}",
+                ),
+                (self.format_count(total_markets), "Markets Tracked"),
+                (f"{top['Share %']:.1f}%", "Top Market Share"),
+                (f"{top_two_share:.1f}%", "Top-2 Concentration"),
+                (
+                    self.format_count(growth_markets),
+                    "Growth Markets with potential",
+                ),
+            ]
+
+            for position, (value, caption) in enumerate(geo_cards, start=1):
+
+                ppt[f"GEO_CARD_{position}"] = value
+
+                ppt[f"GEO_CARD_{position}_Caption"] = {
+                    "object": f"GEO_CARD_{position}",
+                    "group_child_index": 2,
+                    "text": caption,
+                }
+
+            # The insight panel under the cards. Its box holds about two
+            # lines, so the computed fallback is written to roughly the length
+            # the AI is asked for rather than to whatever the data allows.
+            bullets = [
+                str(bullet) for bullet in geography.get("bullets", []) or []
+                if str(bullet).strip()
+            ]
+
+            trailing = named_markets.iloc[2:]
+
+            computed_insight = (
+                market_names[0]
+                + (
+                    f" and {market_names[1]} together take "
+                    f"{top_two_share:.1f}% of delivered leads"
+                    if len(market_names) > 1
+                    else f" takes {top['Share %']:.1f}% of delivered leads"
+                )
+                + (
+                    f", leaving {100 - top_two_share:.1f}% spread across "
+                    f"{len(trailing)} smaller "
+                    f"{'market' if len(trailing) == 1 else 'markets'} "
+                    "where there is room to grow."
+                    if len(trailing)
+                    else " - widening beyond them is the clearest growth path."
+                )
+            )
+
+            ppt["AI_GeographyInsight"] = self.at_least(
+                self.clip(bullets[0] if bullets else "", 195),
+                8,
+                self.clip(computed_insight, 195),
+            )
 
         # KPI_BuyingStage1 sits next to the "No Active Signals" caption,
         # KPI_BuyingStage2 next to the "Consideration + Decision" caption

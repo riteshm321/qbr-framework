@@ -146,6 +146,14 @@ def _plural(count, noun):
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
+def _agrees(count, singular, plural=None):
+
+    """Just the word, agreeing with `count` -- for sentences that already
+    print the number somewhere else ("3 smaller markets", "Spain sits")."""
+
+    return singular if count == 1 else (plural or f"{singular}s")
+
+
 def _lead_lower(text):
 
     """Lowercases only the first character, so a caption reading
@@ -873,7 +881,7 @@ class DeterministicNarrativeBuilder:
 
         status = self._sorted_status()
 
-        actions = [row["Recommendation"] for row in status if row.get("Recommendation")]
+        recommended = [row for row in status if row.get("Recommendation")]
 
         summary = (
             "Convert existing reach before growing it further."
@@ -881,7 +889,69 @@ class DeterministicNarrativeBuilder:
             else "Sustain current momentum across every metric."
         )
 
-        return {"summary": summary, "actions": actions[:5]}
+        geographic = self._geographic_action()
+
+        if geographic:
+
+            # The "Countries" metric row generates its own recommendation
+            # ("evaluate geographic expansion opportunities"), which says
+            # loosely what the geographic action below says with the actual
+            # markets named. Keeping both puts two geography lines on a
+            # six-line slide, so the vaguer one gives way.
+            recommended = [
+                row for row in recommended
+                if row.get("Metric") != "Countries"
+            ]
+
+        actions = [row["Recommendation"] for row in recommended][:5]
+
+        # The geographic action always lands last: it is an addition to the
+        # metric-driven recommendations above it, not a replacement for any of
+        # them. Omitted entirely when the campaign has no market spread to act
+        # on, rather than padded with a generic line.
+        geographic = self._geographic_action()
+
+        if geographic:
+            actions.append(geographic)
+
+        return {"summary": summary, "actions": actions}
+
+    def _geographic_action(self):
+
+        """What to do next about where the campaign sells.
+
+        Three genuinely different situations, three different actions:
+        concentrated delivery calls for widening, a proven mid-tier calls for
+        scaling into it, and an even spread calls for defending it.
+        """
+
+        real, top, top_two = self._markets()
+
+        if top is None or len(real) < 2:
+            return ""
+
+        growth = [
+            str(r.get("Country")) for r in real
+            if str(r.get("Tier")) == "Growth Opportunity"
+        ]
+
+        if growth:
+            return (
+                f"Scale spend into {_join_and(growth)}, already delivering at "
+                "proven rates with the most headroom left of any market."
+            )
+
+        if top_two >= 70:
+            return (
+                f"Widen beyond {str(top.get('Country'))}, which carries "
+                f"{_num(top.get('Share %')):.1f}% of delivery and leaves the "
+                "campaign exposed to a single market."
+            )
+
+        return (
+            f"Hold the current spread across {_plural(len(real), 'market')} "
+            "and test one adjacent territory before committing further budget."
+        )
 
     # --------------------------------------------------------
     # ValueAdd / Partnership
@@ -1086,77 +1156,143 @@ class DeterministicNarrativeBuilder:
     # Geography
     # --------------------------------------------------------
 
-    def geography(self):
+    def _markets(self):
+
+        """
+        The country rows that name an actual place, plus the leading one and
+        the top-two concentration.
+
+        "Other (N countries)" is a combined remainder, never a market: it can't
+        be called the leader, counted as somewhere to expand into, or named in
+        a sentence about where demand sits.
+
+        Returns (real_rows, top_row, top_two_share), with top_row None when the
+        campaign has no usable country data.
+        """
 
         rows = self.package.get("Country Distribution", []) or []
 
-        if not rows:
+        real = [
+            r for r in rows
+            if not str(r.get("Country", "")).startswith("Other (")
+        ]
+
+        if not real:
+            return [], None, 0.0
+
+        return real, real[0], sum(_num(r.get("Share %")) for r in real[:2])
+
+    def geography(self):
+
+        """
+        The market breakdown, written to the lengths the geography slides need
+        rather than to the short-card lengths the other sections use: the
+        heading is a full lead-in line above a row of market cards, and the
+        first bullet sits alone in a wide panel.
+        """
+
+        real, top, top_two = self._markets()
+
+        if top is None:
             return {
                 "heading": "No country-level data available for this campaign.",
                 "bullets": [],
             }
 
-        # "Other (N countries)" is a combined remainder, not a market -- it must
-        # never be described as the leading or a named country.
-        real = [r for r in rows if not str(r.get("Country", "")).startswith("Other (")]
+        total = sum(_num(r.get("Leads")) for r in
+                    (self.package.get("Country Distribution", []) or []))
 
-        if not real:
-            return {
-                "heading": f"Leads spread across {len(rows)} markets.",
-                "bullets": [],
-            }
+        names = [str(r.get("Country")) for r in real]
 
-        top = real[0]
         top_share = _num(top.get("Share %"))
 
-        if top_share >= 50:
-            heading = (
-                f"{top.get('Country')} dominates delivery with "
-                f"{top_share:.1f}% of all leads."
+        # How the rest of the footprint reads once the leader is set aside --
+        # a strong second market and a long thin tail are different stories
+        # and deserve different sentences.
+        if len(real) == 1:
+            spread = (
+                f"{names[0]} is the campaign's only named market, so every "
+                "further lead has to come from somewhere new."
             )
-        elif top_share >= 30:
-            heading = (
-                f"{top.get('Country')} leads delivery at {top_share:.1f}% "
-                "of the total."
+        elif len(real) == 2:
+            spread = (
+                f"{names[1]} carries the remainder at "
+                f"{_num(real[1].get('Share %')):.1f}%, leaving the campaign "
+                "resting on two markets."
             )
         else:
-            heading = (
-                f"Demand is spread across {len(rows)} markets with no single "
-                "one dominant."
+            spread = (
+                f"{names[1]} is the strongest secondary market and "
+                f"{_join_and(names[2:])} make up the emerging tail."
             )
 
-        bullets = [
-            f"{top.get('Country')} delivered {_count(top.get('Leads'))} leads, "
-            f"{top_share:.1f}% of the total."
-        ]
+        heading = (
+            f"{_count(total)} delivered leads spread across "
+            f"{_plural(len(real), 'market')}, with "
+            f"{names[0]} taking {top_share:.1f}%. {spread}"
+        )
 
+        # Bullet 1 is the wide panel under the market KPIs: concentration, and
+        # what that leaves to play for.
         if len(real) > 1:
 
-            second = real[1]
-
-            bullets.append(
-                f"{second.get('Country')} follows with "
-                f"{_count(second.get('Leads'))} leads at "
-                f"{_num(second.get('Share %')):.1f}%."
+            headline = (
+                f"{names[0]} and {names[1]} together take {top_two:.1f}% of "
+                f"delivered leads"
             )
 
-        # Concentration is the actionable read: a top-two carrying most of the
-        # volume is a very different position from an even spread.
-        top_two = sum(_num(r.get("Share %")) for r in real[:2])
+            remainder = len(real) - 2
 
-        if top_two >= 70:
+            if remainder:
+                headline += (
+                    f", leaving {100 - top_two:.1f}% across "
+                    f"{remainder} smaller {_agrees(remainder, 'market')} "
+                    "where there is room to grow."
+                )
+            else:
+                headline += (
+                    ", so widening the footprint is the clearest route to "
+                    "further growth."
+                )
+
+        else:
+            headline = (
+                f"{names[0]} accounts for effectively all delivery, so any "
+                "meaningful growth has to come from opening a second market."
+            )
+
+        bullets = [headline]
+
+        bullets.append(
+            f"{names[0]} delivered {_count(top.get('Leads'))} leads at "
+            f"{top_share:.1f}% of the total, setting the benchmark every "
+            "other market is measured against."
+        )
+
+        # The forward-looking read: whichever markets are big enough to scale
+        # but small enough to have headroom.
+        growth = [
+            r for r in real
+            if str(r.get("Tier")) == "Growth Opportunity"
+        ]
+
+        if growth:
             bullets.append(
-                f"The top two markets carry {top_two:.1f}% of volume, "
-                "so growth depends on widening beyond them."
+                f"{_join_and([str(r.get('Country')) for r in growth])} "
+                f"{_agrees(len(growth), 'sits', 'sit')} in the growth tier, "
+                "already proven and with the most headroom left to take."
+            )
+        elif top_two >= 70:
+            bullets.append(
+                f"With {top_two:.1f}% of volume in two markets, the footprint "
+                "is concentrated enough that a single market's dip would show "
+                "in the campaign total."
             )
         else:
-            tail = len(rows) - 2
-
             bullets.append(
-                f"{tail} further market(s) contribute the remainder, "
-                "a genuinely diversified footprint."
-                if tail > 0
-                else "Delivery is concentrated in a small number of markets."
+                f"Volume is spread evenly enough across "
+                f"{_plural(len(real), 'market')} that no single one carries "
+                "disproportionate risk for the campaign."
             )
 
         return {"heading": heading, "bullets": bullets[:3]}
@@ -1265,7 +1401,68 @@ class DeterministicNarrativeBuilder:
                 if len(items) >= 5:
                     break
 
-        return {"items": items[:5]}
+        items = items[:5]
+
+        # Geography last, for the same reason as the geographic
+        # recommendation: it adds to the campaign's learnings rather than
+        # displacing one of them.
+        geographic = self._geographic_learning()
+
+        if geographic:
+            items.append(geographic)
+
+        return {"items": items}
+
+    def _geographic_learning(self):
+
+        """What the spread of markets taught us.
+
+        Reads the same three situations as _geographic_action(), but states
+        what is true rather than what to do -- the two slides sit pages apart
+        and would read as a repeat if they said the same thing.
+        """
+
+        real, top, top_two = self._markets()
+
+        if top is None or len(real) < 2:
+            return None
+
+        country = str(top.get("Country"))
+
+        if top_two >= 70:
+            return {
+                "title": "Demand is geographically narrow",
+                "detail": (
+                    f"{country} and {str(real[1].get('Country'))} carry "
+                    f"{top_two:.1f}% of delivery, so the campaign's total "
+                    "tracks two markets rather than its whole footprint."
+                ),
+            }
+
+        growth = [
+            str(r.get("Country")) for r in real
+            if str(r.get("Tier")) == "Growth Opportunity"
+        ]
+
+        if growth:
+            return {
+                "title": "Secondary markets are proving out",
+                "detail": (
+                    f"{_join_and(growth)} {_agrees(len(growth), 'is', 'are')} "
+                    "delivering at a scale that justifies treating "
+                    f"{_agrees(len(growth), 'it', 'them')} as core rather "
+                    "than experimental."
+                ),
+            }
+
+        return {
+            "title": "The footprint is genuinely balanced",
+            "detail": (
+                f"Delivery spreads across {_plural(len(real), 'market')} with "
+                f"{country} only reaching {_num(top.get('Share %')):.1f}%, so "
+                "no single territory carries the campaign."
+            ),
+        }
 
     # --------------------------------------------------------
     # ExecutiveConclusion / SpeakerNotes

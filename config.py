@@ -47,11 +47,20 @@ MAX_MONTHLY_DETAIL_SLIDES = 6
 # at which grouping starts comparing like with like.
 MIN_MONTHS_TO_GROUP = 9
 
-# Geographic distribution slide: countries beyond this many are combined into a
-# single "Other" bar. A campaign selling into 30 markets would otherwise
-# produce unreadable bars; the combined row keeps the total reconciling to the
-# campaign's lead count.
-MAX_COUNTRIES_ON_CHART = 8
+# Geography slides: how many market cards the template lays out. Countries
+# beyond this are combined into a single "Other" card rather than dropped, so a
+# campaign selling into 30 markets still fits the slide and the total still
+# reconciles to the campaign's lead count. Must match the number of market
+# shapes the template actually draws -- the code deletes surplus cards but
+# cannot invent extra ones.
+MAX_MARKETS_ON_SLIDE = 5
+
+# Share-of-leads thresholds that sort each market into a tier on the geography
+# slide. Derived from share rather than rank, so a campaign split evenly across
+# four countries reads as four core markets rather than forcing a
+# first/second/third ordering onto figures that don't support one.
+CORE_MARKET_SHARE = 20.0
+GROWTH_MARKET_SHARE = 5.0
 
 # ==========================
 # Paths

@@ -1161,23 +1161,31 @@ class LeadGenAnalyzer:
     def build_country_distribution(self):
 
         """
-        Delivered leads by country, largest first, with each country's share.
+        Delivered leads by country, largest first, with each country's share
+        and the tier that share puts it in.
 
         Verified against the platform's own Region view: for one campaign this
         reproduces 744 / 311 / 172 / 109 / 36 exactly, summing to the campaign's
         1,372 delivered leads.
 
-        Countries beyond MAX_COUNTRIES_ON_CHART are combined into one "Other
-        countries" row rather than dropped, so the bars stay readable on a
-        campaign selling into dozens of markets while the total still
+        Built from the WHOLE campaign (`leads_full`), never the selected
+        analysis window. Where a market sells is a structural fact about the
+        campaign rather than a property of the quarter someone happens to be
+        reviewing, and the geography slides state the full campaign range on
+        their own date line -- so scoping this to the window would put a
+        narrower set of figures under a date range that claims otherwise.
+
+        Countries beyond MAX_MARKETS_ON_SLIDE are combined into one "Other
+        countries" row rather than dropped, so a campaign selling into dozens
+        of markets still fits the cards the template lays out while the total
         reconciles to the campaign's lead count.
         """
 
-        df = self.leads
+        df = self.leads_full
 
         if df.empty or "Country" not in df.columns:
             self.tables["Country Distribution"] = pd.DataFrame(
-                columns=["Country", "Leads", "Share %"]
+                columns=["Country", "Leads", "Share %", "Tier"]
             )
             return
 
@@ -1191,11 +1199,18 @@ class LeadGenAnalyzer:
 
         if counts.empty:
             self.tables["Country Distribution"] = pd.DataFrame(
-                columns=["Country", "Leads", "Share %"]
+                columns=["Country", "Leads", "Share %", "Tier"]
             )
             return
 
-        limit = config.MAX_COUNTRIES_ON_CHART
+        # How many countries the campaign actually delivered into, kept before
+        # the rollup below folds the tail away. The slide's "Markets Tracked"
+        # figure has to be this, not the number of rows that survive: a
+        # campaign in nine countries tracks nine markets even when the slide
+        # only has room to name four of them.
+        total_markets = len(counts)
+
+        limit = config.MAX_MARKETS_ON_SLIDE
 
         if len(counts) > limit:
 
@@ -1216,7 +1231,39 @@ class LeadGenAnalyzer:
             (counts["Leads"] / total * 100).round(2) if total else 0
         )
 
+        counts["Tier"] = [
+            self._market_tier(row["Country"], row["Share %"])
+            for _, row in counts.iterrows()
+        ]
+
+        counts.attrs["total_markets"] = total_markets
+
         self.tables["Country Distribution"] = counts
+
+    @staticmethod
+    def _market_tier(country, share):
+
+        """
+        The one-word verdict printed under each market on the geography slide.
+
+        Judged on share of delivered leads, not on rank: a campaign split
+        roughly evenly across four countries has four core markets, and calling
+        the fourth "early stage" purely because it sorted last would misread it.
+
+        The combined remainder row is never a market, so it never gets a
+        market's tier.
+        """
+
+        if str(country).startswith("Other ("):
+            return "Long Tail"
+
+        if share >= config.CORE_MARKET_SHARE:
+            return "Core Market"
+
+        if share >= config.GROWTH_MARKET_SHARE:
+            return "Growth Opportunity"
+
+        return "Early Stage"
 
     def build_topic_categories(self):
 

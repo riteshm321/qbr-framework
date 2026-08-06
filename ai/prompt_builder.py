@@ -223,12 +223,22 @@ sentence itself.
 - AudienceInterest: read "Trending Topics" and "Topic Categories".
   heading 8-12 words; summary 18-26 words.
 
-- Geography: read "Country Distribution", which gives delivered leads and share
-  of total by country. Say where demand concentrated and what that implies for
-  where to invest next -- concentration in one market and a long tail of small
-  ones are different situations. A row named "Other (N countries)" is a combined
-  remainder, not a place: never describe it as a market.
-  heading 8-12 words; exactly 3 bullets, 10-14 WORDS EACH.
+- Geography: read "Country Distribution", which gives delivered leads, share of
+  total and a tier per country. Say where demand concentrated and what that
+  implies for where to invest next -- concentration in one market and a long
+  tail of small ones are different situations. A row named "Other (N
+  countries)" is a combined remainder, not a place: never describe it as a
+  market.
+  IMPORTANT -- unlike every other section, this table covers the WHOLE
+  campaign, not the selected reporting period, and the slides it feeds say so
+  on their own date line. Never tie anything in this section to the reporting
+  period or to a quarter.
+  "heading" is the lead-in line above a row of market cards: 25-35 words, one
+  or two complete sentences naming the leading market and what the rest of the
+  spread looks like.
+  Then exactly 3 bullets, 22-30 WORDS EACH. Bullet 1 sits alone in a wide panel
+  under the market KPIs, so it must be a complete, self-contained sentence
+  about concentration and where the room to grow is.
 
 - Engagement: read "Account Funnel" and "Account Conversion" -- the
   Targeted / Reached / Engaged account funnel. This is NOT about impressions,
@@ -258,12 +268,20 @@ sentence itself.
   figures, so covering a different metric there contradicts the number printed
   above it.
 
-- KeyLearnings: exactly 5 entries. "title" 3-5 words (a short phrase, no
+- KeyLearnings: exactly 6 entries. "title" 3-5 words (a short phrase, no
   trailing full stop). "detail" 13-19 words, one sentence that explains what the
   figures mean rather than listing them.
+  The SIXTH entry must be about geography, read from "Country Distribution" --
+  what the spread of markets teaches. Put it last, not first: it is an addition
+  to the campaign's learnings, not the headline. Omit the sixth entry entirely
+  when that table is empty or names only one country.
 
-- Recommendations.actions: exactly 5 forward-looking actions, one sentence and
+- Recommendations.actions: exactly 6 forward-looking actions, one sentence and
   14-20 words each.
+  The SIXTH action must be the geographic one, read from "Country
+  Distribution": where to expand, consolidate or test next, given how
+  concentrated delivery is. Put it last. Omit it when that table is empty or
+  names only one country.
 
 - Partnership.summary: read "Value Add Metrics" and "Top Intent Accounts".
   THREE COMPLETE SENTENCES, 45-60 words in total. This one is a wide full-width

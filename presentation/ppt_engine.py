@@ -37,8 +37,6 @@ COMMENTARY_BODY_FONT = {
     "AI_TrendAnalysisSummary": Pt(11),
     "AI_EngagementSummary": Pt(11),
     "AI_ContentPerformanceSummary": Pt(11),
-    # Cloned from the funnel card, so it inherits the same sizing problem.
-    "AI_CountrySummary": Pt(11),
 }
 
 # Vertical space at the foot of every slide occupied by the template's
@@ -144,15 +142,21 @@ class PowerPointEngine:
         # Grouped KPI cards
         # -------------------------------------------------
 
-        def write_into(tf):
+        def write_into(tf, wrap=False):
 
-            # These number/label boxes are sized (spAutoFit) for
-            # whatever digit-count/word-length the template's example
-            # happened to have. With word_wrap on, a longer real value
-            # wraps to a second line that overlaps the rest of the card
-            # instead of growing the box -- word_wrap off lets it
+            # The number boxes are sized (spAutoFit) for whatever digit count
+            # the template's example happened to have. With word_wrap on, a
+            # longer real value wraps to a second line that overlaps the rest
+            # of the card instead of growing the box -- word_wrap off lets it
             # overflow horizontally instead, the safer failure mode.
-            tf.word_wrap = False
+            #
+            # Captions are the opposite case. They are full phrases sitting in
+            # a box the template already sized for two wrapped lines ("Total
+            # Leads across 5 markets"), so switching wrapping off runs them
+            # straight out through the side of the card and across the card
+            # beside it. They keep whatever wrapping the template gave them.
+            if not wrap:
+                tf.word_wrap = False
 
             if tf.paragraphs and tf.paragraphs[0].runs:
 
@@ -180,7 +184,11 @@ class PowerPointEngine:
                         group_child_index < len(children)
                         and children[group_child_index].has_text_frame
                     ):
-                        write_into(children[group_child_index].text_frame)
+                        # group_child_index only ever targets a card's caption
+                        # -- the number is found by the search below.
+                        write_into(
+                            children[group_child_index].text_frame, wrap=True
+                        )
                         print(f"[UPDATED GROUP] {object_name}")
                         return True
 
@@ -270,6 +278,54 @@ class PowerPointEngine:
         print(f"[UPDATED] {object_name}")
 
         return True
+
+    def clone_paragraphs(self, object_name, source_indices):
+
+        """
+        Appends copies of existing paragraphs to a fixed-length text box, so a
+        list the template drew with N entries can carry N+1.
+
+        Key Learnings and the recommendations list are single text boxes whose
+        entries are plain paragraphs, not list placeholders -- there is no way
+        to add an entry except to add a paragraph. Copying an existing one
+        carries its font, weight, colour and spacing across, which writing a
+        fresh paragraph would not.
+
+        Returns the index of the first appended paragraph, or None if the
+        object isn't there.
+        """
+
+        shape = self.find_shape(object_name)
+
+        if shape is None or not shape.has_text_frame:
+            print(f"[SKIPPED] clone_paragraphs {object_name} (not found)")
+            return None
+
+        paragraphs = shape.text_frame.paragraphs
+
+        first_new = len(paragraphs)
+
+        sources = []
+
+        for index in source_indices:
+
+            if not -len(paragraphs) <= index < len(paragraphs):
+                print(f"[SKIPPED] clone_paragraphs {object_name}[{index}]")
+                return None
+
+            sources.append(paragraphs[index]._p)
+
+        # Resolved to elements before any is appended -- appending shifts the
+        # negative indices the callers use, so reading them lazily would copy
+        # a copy on the second pass.
+        body = shape.text_frame._txBody
+
+        for source in sources:
+            body.append(deepcopy(source))
+
+        print(f"[EXTENDED] {object_name} by {len(source_indices)} paragraph(s)")
+
+        return first_new
 
     # ---------------------------------------------------------
     # Replace a variable-length numbered list (e.g. the agenda),
@@ -580,20 +636,6 @@ class PowerPointEngine:
         if object_name == "Chart_TopicDistribution":
 
             self._style_topic_distribution(chart, dataframe)
-
-        if object_name == "Chart_CountryDistribution":
-
-            # Cloned from the funnel chart, which colours per series -- with one
-            # series that paints every country the same. Highlighting the
-            # largest market instead gives the chart a focal point, matching how
-            # Content Performance and Trending Topics treat their own top bar.
-            value_column = dataframe.columns[1]
-
-            self._highlight_top_n_points(chart, dataframe[value_column].tolist(), 1)
-
-            # A single series needs no legend -- the axis already names every
-            # country, so a legend reading "Leads" only adds clutter.
-            chart.has_legend = False
 
         if object_name == "Chart_BuyingStage":
 
@@ -1727,41 +1769,72 @@ class PowerPointEngine:
     # looking like real data for whatever client this deck is for.
     # ---------------------------------------------------------
 
-    # The geographic slide is built by cloning the engagement funnel slide,
-    # which already carries exactly the layout it needs: a horizontal bar chart
-    # on the left and an insights card on the right, in the deck's own styling.
-    # Cloning rather than composing from scratch means it inherits the
-    # template's fonts, colours and spacing automatically, and honours the rule
-    # that the template file itself is never edited.
-    COUNTRY_SLIDE_DONOR = "Chart_EngagementFunnel"
+    # ---------------------------------------------------------
+    # Geography section (divider + market cards + market KPIs)
+    #
+    # The two content slides reuse shape names that already exist earlier in
+    # the deck. The KPI slide was built from the Q2 performance slide and
+    # kept its names -- PERIOD_Q2, CARD_Q2_TotalLeads, TITLE_Q2Performance --
+    # and the market-card slide's shapes carry PowerPoint's own defaults
+    # ("Text 4", "Shape 6"), which say nothing about what they hold.
+    #
+    # find_shape() resolves by name and takes the first match, so left as they
+    # are the geography KPI cards would either never be filled (the Q2 slide
+    # matches first) or, in Full Campaign mode where the Q2 pair is deleted,
+    # be filled with a period's figures under a geography heading. Both slides
+    # are renamed into their own GEO_* namespace immediately after load,
+    # before anything else looks at the deck.
+    #
+    # The rename happens in the loaded copy only -- the template file on disk
+    # keeps whatever names its author gave it.
+    # ---------------------------------------------------------
 
-    COUNTRY_SLIDE_RENAMES = {
-        "TITLE_EngagementFunnel": "TITLE_CountryDistribution",
-        "Chart_EngagementFunnel": "Chart_CountryDistribution",
-        "CARD_EngagementFunnel": "CARD_CountryDistribution",
-        "AI_EngagementHeading": "AI_CountryHeading",
-        "AI_EngagementSummary": "AI_CountrySummary",
+    # The section is found by what its market slide is made of, not by a shape
+    # name. The divider's name (SECTION_AudienceInterest) is already used by
+    # the insights divider earlier in the deck, so a name lookup finds that one
+    # and renames -- then deletes -- the topic and funnel slides instead. The
+    # market slide is unmistakable by construction: it is the only slide built
+    # from freeform markers, one per market.
+    GEOGRAPHY_MIN_MARKERS = 2
+
+    GEOGRAPHY_KPI_RENAMES = {
+        "PERIOD_Q2": "GEO_Period",
+        "TITLE_Q2Performance": "TITLE_GeographyPipeline",
+        "AI_Q2_TopAsset": "AI_GeographyInsight",
+        "CARD_Q2_TotalLeads": "GEO_CARD_1",
+        "CARD_Q2_Accounts": "GEO_CARD_2",
+        "CARD_Q2_Assets": "GEO_CARD_3",
+        "CARD_Q2_JobTitles": "GEO_CARD_4",
+        "CARD_Q2_Country": "GEO_CARD_5",
     }
 
-    def add_country_slide(self):
+    def namespace_geography_slides(self):
 
         """
-        Adds the geographic distribution slide, immediately after the funnel it
-        was cloned from -- both read the same audience from different angles, so
-        they belong together in the insights section.
+        Renames the two geography content slides into the GEO_* namespace and
+        reports how many market cards the template actually lays out.
 
-        Returns True when the slide was added. Skipped silently when the donor
-        can't be found, so a template without that slide degrades to a deck
-        without this one rather than failing.
+        Returns the market-card count, or 0 when the section isn't in the
+        template at all -- a template without these slides simply produces a
+        deck without them rather than failing.
         """
 
-        donor_index = self._slide_index_by_shape(self.COUNTRY_SLIDE_DONOR)
+        markets_index = self._market_slide_index()
 
-        if donor_index is None:
-            print("[SKIPPED] add_country_slide (donor slide not found)")
-            return False
+        if markets_index is None:
+            print("[SKIPPED] geography section (market slide not found)")
+            return 0
 
-        new_slide = duplicate_slide(self.prs, donor_index, donor_index + 1)
+        # The divider introduces the two slides around it, which is the only
+        # relationship between them the template records -- nothing on the
+        # divider names either content slide.
+        kpi_index = markets_index + 1
+
+        if kpi_index >= len(self.prs.slides):
+            print("[SKIPPED] geography section (KPI slide missing)")
+            return 0
+
+        card_count = self._namespace_market_slide(self.prs.slides[markets_index])
 
         renamed = 0
 
@@ -1771,21 +1844,190 @@ class PowerPointEngine:
 
             for shape in shapes:
 
-                if shape.name in self.COUNTRY_SLIDE_RENAMES:
-                    shape.name = self.COUNTRY_SLIDE_RENAMES[shape.name]
+                if shape.name in self.GEOGRAPHY_KPI_RENAMES:
+                    shape.name = self.GEOGRAPHY_KPI_RENAMES[shape.name]
                     renamed += 1
 
                 if hasattr(shape, "shapes"):
                     walk(shape.shapes)
 
-        walk(new_slide.shapes)
+        walk(self.prs.slides[kpi_index].shapes)
 
         print(
-            f"[ADDED] geographic distribution slide after slide "
-            f"{donor_index + 1} ({renamed} shapes renamed)"
+            f"[NAMESPACED] geography slides {markets_index + 1}-{kpi_index + 1} "
+            f"({card_count} market cards, {renamed} KPI shapes)"
         )
 
-        return True
+        return card_count
+
+    def _market_slide_index(self):
+
+        """The slide built from freeform market markers, or None."""
+
+        for index, slide in enumerate(self.prs.slides):
+
+            markers = sum(
+                1 for shape in slide.shapes
+                if shape.shape_type == MSO_SHAPE_TYPE.FREEFORM
+            )
+
+            if markers >= self.GEOGRAPHY_MIN_MARKERS:
+                return index
+
+        return None
+
+    @staticmethod
+    def _namespace_market_slide(slide):
+
+        """
+        Names the market-card slide's shapes by where they sit, not by what
+        they are called.
+
+        Every card is a freeform marker with a name box and a detail box drawn
+        inside it. The boxes have no names worth matching on, but their
+        geometry is unambiguous: each sits within its own marker's bounds, and
+        within a marker the name is above the detail. Reading the layout means
+        the wiring survives the author adding, removing or re-styling cards --
+        which a fixed "Text 4 is the first country" map would not.
+        """
+
+        markers = sorted(
+            (
+                shape for shape in slide.shapes
+                if shape.shape_type == MSO_SHAPE_TYPE.FREEFORM
+            ),
+            key=lambda shape: shape.left,
+        )
+
+        def centre(shape):
+            return (shape.left + shape.width / 2, shape.top + shape.height / 2)
+
+        claimed = set()
+
+        for index, marker in enumerate(markers, start=1):
+
+            marker.name = f"GEO_Market{index}_Shape"
+
+            inside = []
+
+            for shape in slide.shapes:
+
+                if shape is marker or not shape.has_text_frame:
+                    continue
+
+                if not shape.text_frame.text.strip():
+                    continue
+
+                x, y = centre(shape)
+
+                if (
+                    marker.left <= x <= marker.left + marker.width
+                    and marker.top <= y <= marker.top + marker.height
+                ):
+                    inside.append(shape)
+
+            inside.sort(key=lambda shape: shape.top)
+
+            for label, shape in zip(("Name", "Detail"), inside):
+                shape.name = f"GEO_Market{index}_{label}"
+                claimed.add(id(shape))
+
+        # Whatever full-width text box is left over is the slide's lead-in
+        # line. The title is excluded by name rather than by width -- it is
+        # very nearly as wide as the intro, so size alone would not separate
+        # them reliably.
+        leftovers = [
+            shape for shape in slide.shapes
+            if shape.has_text_frame
+            and shape.text_frame.text.strip()
+            and id(shape) not in claimed
+            and not shape.name.startswith("GEO_Market")
+        ]
+
+        for shape in leftovers:
+
+            if shape.name.startswith("TITLE_"):
+                shape.name = "TITLE_GeographyMarkets"
+
+        intro = [
+            shape for shape in leftovers
+            if not shape.name.startswith("TITLE_")
+        ]
+
+        if intro:
+            max(intro, key=lambda shape: shape.width).name = "AI_GeographyIntro"
+
+        return len(markers)
+
+    def trim_market_cards(self, keep):
+
+        """
+        Deletes the market cards the campaign has no market for.
+
+        The template draws a fixed number of cards; a campaign selling into
+        three countries fills three of them. Leaving the rest showing the
+        template's own example markets would put another company's countries
+        on the slide, so the surplus is removed outright.
+        """
+
+        removed = 0
+
+        for slide in self.prs.slides:
+
+            for shape in list(slide.shapes):
+
+                if not shape.name.startswith("GEO_Market"):
+                    continue
+
+                index = int(shape.name[len("GEO_Market"):].split("_")[0])
+
+                if index > keep:
+                    shape._element.getparent().remove(shape._element)
+                    removed += 1
+
+        if removed:
+            print(f"[REMOVED] {removed} unused market card shape(s)")
+
+    def remove_geography_section(self):
+
+        """
+        Drops all three geography slides.
+
+        A campaign delivering into a single country has nothing to break down
+        by market: the cards would be one filled and the rest deleted, and the
+        concentration KPIs would all read 100%. The country count on the
+        Campaign Snapshot already says everything there is to say.
+        """
+
+        markets_index = self._market_slide_index()
+
+        if markets_index is None:
+            return
+
+        doomed = [markets_index, markets_index + 1]
+
+        # The divider before the market slide goes too, but only once
+        # confirmed to be a divider -- a section heading and nothing else.
+        # Deleting by position alone would take a content slide with it if the
+        # section were ever reordered.
+        if markets_index:
+
+            previous = self.prs.slides[markets_index - 1]
+
+            if any(
+                shape.name.startswith("SECTION_")
+                for shape in previous.shapes
+            ):
+                doomed.append(markets_index - 1)
+
+        for index in sorted(doomed, reverse=True):
+            if index < len(self.prs.slides):
+                delete_slide(self.prs, index)
+
+        print(
+            f"[REMOVED] geography section ({len(doomed)} slides, "
+            "fewer than 2 markets)"
+        )
 
     def fit_footnote(self, object_name, reference_names, min_height, gap=45720):
 
@@ -1916,6 +2158,109 @@ class PowerPointEngine:
 
             print(f"[RESIZED BODY] {object_name} -> {size.pt:g}pt")
 
+    # Rough metrics for estimating how tall wrapped text will render. The
+    # deck uses one humanist sans throughout, whose average glyph runs a little
+    # over half its point size; 1.2 is the line height PowerPoint applies at
+    # single spacing. Both are approximations, which is why shrink_to_fit()
+    # keeps a margin in hand rather than filling the box to the last point.
+    CHAR_WIDTH_RATIO = 0.52
+    LINE_HEIGHT_RATIO = 1.2
+    FIT_SAFETY_MARGIN = 0.92
+
+    def shrink_to_fit(self, object_name, min_scale=0.7):
+
+        """
+        Scales a text box's font down until its content fits the box.
+
+        Needed wherever the number of entries isn't fixed. Key Learnings is
+        drawn for five, and a campaign with a market breakdown gets a sixth --
+        which at the template's own font size runs off the bottom of the
+        slide. Rather than sizing for the worst case and leaving five-entry
+        decks looking sparse, the text keeps its designed size whenever it
+        fits and only gives ground when it doesn't.
+
+        PowerPoint's own shrink-on-overflow is not an option here: it is
+        applied by the application when the box is edited, so a deck rendered
+        or exported without ever being opened keeps overflowing.
+        """
+
+        shape = self.find_shape(object_name)
+
+        if shape is None or not shape.has_text_frame:
+            return
+
+        frame = shape.text_frame
+
+        width = shape.width - (frame.margin_left or 0) - (frame.margin_right or 0)
+        height = shape.height - (frame.margin_top or 0) - (frame.margin_bottom or 0)
+
+        usable_width = Emu(width).pt
+        usable_height = Emu(height).pt * self.FIT_SAFETY_MARGIN
+
+        # (text, point size, fixed spacing) per paragraph. Spacing is left
+        # unscaled -- it is set on the paragraph, not the run, and shrinking
+        # the font doesn't change it.
+        lines = []
+
+        for paragraph in frame.paragraphs:
+
+            size = next(
+                (run.font.size.pt for run in paragraph.runs if run.font.size),
+                None,
+            )
+
+            spacing = sum(
+                value.pt for value in
+                (paragraph.space_before, paragraph.space_after)
+                if value is not None
+            )
+
+            lines.append((paragraph.text, size, spacing))
+
+        # Some runs carry no explicit size and inherit one -- the bold titles
+        # in Key Learnings are written that way. They still take up space and
+        # still have to shrink, so they borrow the size of a sized run in the
+        # same box, which in these template boxes is the size they render at.
+        default_size = next(
+            (size for _, size, _ in lines if size), 15.0
+        )
+
+        lines = [
+            (text, size or default_size, spacing)
+            for text, size, spacing in lines
+        ]
+
+        def height_at(scale):
+
+            total = 0.0
+
+            for text, size, spacing in lines:
+
+                size *= scale
+
+                per_line = max(1, usable_width / (size * self.CHAR_WIDTH_RATIO))
+
+                wrapped = max(1, math.ceil(len(text) / per_line))
+
+                total += wrapped * size * self.LINE_HEIGHT_RATIO + spacing
+
+            return total
+
+        scale = 1.0
+
+        while scale > min_scale and height_at(scale) > usable_height:
+            scale -= 0.05
+
+        if scale >= 1.0:
+            return
+
+        for paragraph in frame.paragraphs:
+            for run in paragraph.runs:
+                current = run.font.size.pt if run.font.size else default_size
+                run.font.size = Pt(round(current * scale, 1))
+
+        print(f"[SHRUNK] {object_name} to {scale:.0%} to fit its box")
+
     def _delete_slides_by_shape(self, shape_names):
 
         for name in shape_names:
@@ -1936,10 +2281,16 @@ class PowerPointEngine:
         merge_period_boxes=False,
         periods=None,
         empty_data_slides=None,
-        add_country_slide=False
+        market_count=0
     ):
 
         self.load()
+
+        # First of all, before any other pass reads a shape by name: the
+        # geography slides share several names with the Q2 performance slide,
+        # and until they are renamed a lookup for either can land on the wrong
+        # one.
+        market_slots = self.namespace_geography_slides()
 
         if periods:
 
@@ -1948,11 +2299,18 @@ class PowerPointEngine:
                 periods.get("comparison_slots", [])
             )
 
-        # Before the fill pass, so its shapes exist to be filled -- and before
-        # the empty-data deletions, so a campaign with no country data has this
-        # slide removed by the same mechanism as any other dataless slide.
-        if add_country_slide:
-            self.add_country_slide()
+        if market_slots and market_count > 1:
+
+            self.trim_market_cards(min(market_count, market_slots))
+
+            # Key Learnings and the recommendations list each gain one entry
+            # for geography. Grown here, before the fill pass, so the extra
+            # paragraphs exist by the time their text is written.
+            self.clone_paragraphs("AI_KeyLearnings", (-2, -1))
+            self.clone_paragraphs("AI_H2Recommendations", (-1,))
+
+        else:
+            self.remove_geography_section()
 
         if empty_data_slides:
             self._delete_slides_by_shape(empty_data_slides)
@@ -1968,6 +2326,12 @@ class PowerPointEngine:
             self.apply_commentary_body_font()
 
             self.clear_comparison_summary_overlap()
+
+            # Variable-length lists, after their text is in: how far they
+            # overflow depends on what the campaign produced, so it can only
+            # be measured once written.
+            self.shrink_to_fit("AI_KeyLearnings")
+            self.shrink_to_fit("AI_H2Recommendations")
 
             # Footnote boxes the template sized for one short line, which real
             # commentary overflows into the content above them.

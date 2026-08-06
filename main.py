@@ -371,20 +371,19 @@ empty_data_slides = []
 if analysis.trending_topics.empty:
     empty_data_slides.append("Chart_TrendingTopics")
 
-# The geographic slide is only worth adding when there is a country breakdown
-# to show, and only when there is more than one country -- a single-market
-# campaign says everything it needs to in the "Countries: 1" KPI, and a
-# one-bar chart would look like a rendering fault.
+# How many markets the geography section has to show. Below two there is
+# nothing to break down -- the country count on the Campaign Snapshot already
+# says it all -- so the whole section comes out of the deck.
 country_distribution = analysis.tables.get("Country Distribution")
 
-add_country_slide = (
-    country_distribution is not None and len(country_distribution) > 1
+market_count = (
+    0 if country_distribution is None else len(country_distribution)
 )
 
-if not add_country_slide:
+if market_count < 2:
     print(
-        "\n[GEOGRAPHY] Country slide skipped - "
-        "fewer than 2 countries in the delivered leads.\n"
+        "\n[GEOGRAPHY] Section dropped - "
+        "fewer than 2 markets in the delivered leads.\n"
     )
 
 ppt.create(
@@ -395,7 +394,7 @@ ppt.create(
     merge_period_boxes=True,
     periods=analysis.period_meta,
     empty_data_slides=empty_data_slides,
-    add_country_slide=add_country_slide
+    market_count=market_count
 )
 
 from presentation.ppt_scanner import PPTScanner
