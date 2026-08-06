@@ -1,5 +1,6 @@
 import calendar
 import math
+import re
 from copy import deepcopy
 from pathlib import Path
 from pptx import Presentation
@@ -1957,36 +1958,161 @@ class PowerPointEngine:
         if intro:
             max(intro, key=lambda shape: shape.width).name = "AI_GeographyIntro"
 
+        # The rule the cards are threaded onto. It spans exactly the block of
+        # cards, so it has to be resized whenever the block is -- otherwise it
+        # runs on past the last card into empty slide. It is the only wide
+        # shape here carrying no text.
+        axis = [
+            shape for shape in slide.shapes
+            if shape.shape_type != MSO_SHAPE_TYPE.FREEFORM
+            and not shape.name.startswith(("GEO_Market", "TITLE_", "AI_"))
+            and not (shape.has_text_frame and shape.text_frame.text.strip())
+        ]
+
+        if axis:
+            max(axis, key=lambda shape: shape.width).name = "GEO_MarketAxis"
+
         return len(markers)
+
+    @staticmethod
+    def _market_cards(slide):
+
+        """{position: [shapes]} for each market card on the slide."""
+
+        cards = {}
+
+        for shape in slide.shapes:
+
+            match = re.match(r"GEO_Market(\d+)_", shape.name)
+
+            if match:
+                cards.setdefault(int(match.group(1)), []).append(shape)
+
+        return cards
+
+    @staticmethod
+    def _card_marker(shapes):
+
+        """The freeform a card is drawn on -- the shape whose position the
+        card's labels are placed relative to."""
+
+        for shape in shapes:
+            if shape.shape_type == MSO_SHAPE_TYPE.FREEFORM:
+                return shape
+
+        return max(shapes, key=lambda shape: shape.width)
 
     def trim_market_cards(self, keep):
 
         """
-        Deletes the market cards the campaign has no market for.
+        Removes the market cards the campaign has no market for, then
+        recentres the ones that remain.
 
         The template draws a fixed number of cards; a campaign selling into
         three countries fills three of them. Leaving the rest showing the
         template's own example markets would put another company's countries
-        on the slide, so the surplus is removed outright.
+        on the slide, so the surplus is deleted outright -- but deleting alone
+        leaves the survivors bunched against the left edge with a bay of empty
+        slide to their right, and the rule they sit on still running the full
+        width into nothing.
+
+        The cards keep the spacing the template gave them. They are drawn as a
+        near-continuous chain -- a quarter-inch between two-inch cards -- and
+        that chain is the design; spreading three cards over the width the
+        template used for five would open ten times the gap and lose it. So
+        the block keeps its pitch, is recentred on the same axis the full row
+        was centred on, and the rule is resized to span exactly the cards that
+        are left, which is the relationship the template already holds.
         """
+
+        index = self._market_slide_index()
+
+        if index is None:
+            return
+
+        slide = self.prs.slides[index]
+
+        cards = self._market_cards(slide)
+
+        if not cards:
+            return
+
+        positions = sorted(cards)
+
+        markers = {
+            position: self._card_marker(shapes)
+            for position, shapes in cards.items()
+        }
+
+        # Measured before anything is deleted: the pitch and the centre both
+        # describe the row the template drew, which is what the trimmed row
+        # has to go on matching.
+        pitch = (
+            round(
+                (markers[positions[-1]].left - markers[positions[0]].left)
+                / (len(positions) - 1)
+            )
+            if len(positions) > 1 else 0
+        )
+
+        block_left = markers[positions[0]].left
+
+        block_right = markers[positions[-1]].left + markers[positions[-1]].width
+
+        centre = (block_left + block_right) / 2
 
         removed = 0
 
-        for slide in self.prs.slides:
+        for position in positions:
 
-            for shape in list(slide.shapes):
+            if position > keep:
 
-                if not shape.name.startswith("GEO_Market"):
-                    continue
-
-                index = int(shape.name[len("GEO_Market"):].split("_")[0])
-
-                if index > keep:
+                for shape in cards.pop(position):
                     shape._element.getparent().remove(shape._element)
                     removed += 1
 
-        if removed:
-            print(f"[REMOVED] {removed} unused market card shape(s)")
+        if not removed:
+            return
+
+        print(f"[REMOVED] {removed} unused market card shape(s)")
+
+        self._recentre_market_cards(cards, markers, pitch, centre)
+
+    def _recentre_market_cards(self, cards, markers, pitch, centre):
+
+        kept = sorted(cards)
+
+        if not kept or not pitch:
+            return
+
+        width = markers[kept[0]].width
+
+        block = (len(kept) - 1) * pitch + width
+
+        left = centre - block / 2
+
+        for slot, position in enumerate(kept):
+
+            shift = round(left + slot * pitch - markers[position].left)
+
+            if not shift:
+                continue
+
+            # Every shape of the card moves together -- the marker and the two
+            # labels drawn inside it are separate shapes, not a group.
+            for shape in cards[position]:
+                shape.left += shift
+
+        axis = self.find_shape("GEO_MarketAxis")
+
+        if axis is not None:
+            axis.left = round(left)
+            axis.width = round(block)
+
+        print(
+            f"[RECENTRED] {len(kept)} market cards across "
+            f"{Emu(round(block)).inches:.2f}in"
+        )
 
     def remove_geography_section(self):
 

@@ -1494,16 +1494,29 @@ class PresentationData:
             # share earns. Cards past the last market are deleted by the
             # engine rather than blanked, so nothing is written for them.
 
+            # Countries past the last card are combined into one remainder
+            # row. It gets a card like any other, but not a country's card:
+            # its name box would otherwise read "Other (3 countries)", which
+            # overflows a box sized for a country name, and the general
+            # shortener would cut it back to a bare "Other" and lose the
+            # count. The name says what it is and the bottom line carries the
+            # count that would have been lost.
+            tail_count = total_markets - len(named_markets)
+
             for position, (_, row) in enumerate(markets.iterrows(), start=1):
 
-                ppt[f"GEO_Market{position}_Name"] = self.shorten_market(
-                    row["Country"]
+                combined = str(row["Country"]).startswith("Other (")
+
+                ppt[f"GEO_Market{position}_Name"] = (
+                    "Other Markets" if combined
+                    else self.shorten_market(row["Country"])
                 )
 
                 for line, text in enumerate((
                     f"{self.format_count(int(row['Leads']))} leads",
                     f"{row['Share %']:.1f}%",
-                    row["Tier"],
+                    f"{tail_count} more countries" if combined
+                    else row["Tier"],
                 )):
 
                     ppt[f"GEO_Market{position}_Detail_p{line}"] = {
