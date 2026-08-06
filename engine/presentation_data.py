@@ -478,6 +478,62 @@ class PresentationData:
 
         ppt["SECTION_Q1"] = periods.get("section_title", "")
 
+        # -------------------------------------------------
+        # PARTIAL-PERIOD LEGEND
+        #
+        # Periods that cover only part of a calendar month or quarter are
+        # marked with a trailing asterisk, which follows the label into the
+        # agenda, the section dividers, the comparison chart's legend and the
+        # metrics table's headers. The mark was never explained anywhere, so a
+        # reader meeting "April *" beside a -22.84% had nothing to resolve it
+        # against -- and that percentage is a shorter month, not a collapse.
+        #
+        # Built from whichever periods are actually partial and the campaign's
+        # own dates, so it names the real periods rather than describing the
+        # concept. Empty when nothing is partial, which is what stops the note
+        # being placed at all.
+        # -------------------------------------------------
+
+        # Both slot lists, because they mark different slides. "slots" drives
+        # the period detail slides and the agenda; "comparison_slots" drives
+        # the comparison chart and the metrics table, and the two are not the
+        # same set -- Full Campaign has a single, whole-campaign slot that is
+        # never partial, yet still breaks the comparison down into months of
+        # which the first and last are. Reading only "slots" meant the one
+        # mode where the asterisk appears solely on the comparison slides was
+        # the one mode that got no legend for it.
+        partial_labels = []
+
+        for slot in [
+            *periods.get("slots", []),
+            *periods.get("comparison_slots", []),
+        ]:
+
+            if not slot.get("partial"):
+                continue
+
+            label = slot.get("plain_label") or slot.get("label", "").rstrip(" *")
+
+            if label and label not in partial_labels:
+                partial_labels.append(label)
+
+        if partial_labels:
+
+            overall = periods.get("overall_range", "")
+
+            # Kept short on purpose: this sits in a footnote strip with a
+            # fixed amount of room above the footer band, and a longer
+            # sentence is skipped rather than placed badly.
+            ppt["AI_PartialPeriodNote"] = (
+                f"* {self.join_and(partial_labels)} "
+                f"{'is a' if len(partial_labels) == 1 else 'are'} partial "
+                f"{'period' if len(partial_labels) == 1 else 'periods'}"
+                + (f" ({overall})" if overall else "")
+                + f", covering fewer days than a full one, so "
+                f"{'its total is' if len(partial_labels) == 1 else 'their totals are'} "
+                "not directly comparable."
+            )
+
         # Agenda: fixed items around the period-specific performance
         # section(s), which vary in number and wording with the mode.
 

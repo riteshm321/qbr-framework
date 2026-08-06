@@ -2155,6 +2155,193 @@ class PowerPointEngine:
             "fewer than 2 markets)"
         )
 
+    # The asterisk marking a partial period needs somewhere to be explained.
+    # It reaches the reader in three places -- the agenda, the comparison
+    # chart's legend and the metrics table's column headers -- and in the last
+    # two it qualifies a percentage change sitting right beside it, which is
+    # exactly where an unexplained mark does damage.
+    #
+    # The note is cloned from the trend chart's own footnote rather than built
+    # from scratch, so it arrives in the deck's footnote styling; that slide
+    # already solves this same problem for its forecast asterisk, and the two
+    # should look like the same device.
+    #
+    # Each target names a shape that both identifies the slide and acts as the
+    # note's vertical reference, so the note lands below that slide's content
+    # rather than at a position written into the code.
+    PARTIAL_NOTE_DONOR = "AI_TrendAnalysisChartNote"
+
+    # Per slide: the shape the note is aligned to, and the shapes it has to
+    # clear. The alignment shape doubles as the slide's identifier, so a
+    # template missing that slide simply doesn't get a note.
+    #
+    # The comparison chart's note goes in the right-hand column rather than
+    # under the chart: the strip below the chart already carries the
+    # comparison summary and then the footer, and a third line of text does
+    # not fit between them. The column beside it, under the last metric card,
+    # is empty and sits level with the chart legend the asterisk appears in.
+    #
+    # The agenda is deliberately not in this list. Its list placeholder is a
+    # fixed-height box, vertically centred, running to within a quarter-inch
+    # of the footer band whether it holds four items or twelve -- so there is
+    # no strip beneath it to put a note in, at any agenda length. A note
+    # forced in there lands under the logo and off the bottom of the slide.
+    PARTIAL_NOTE_TARGETS = (
+        {
+            "note": "AI_PartialNote_Chart",
+            "align": "KPI_ComparisonMetric2",
+            "clear": ("KPI_ComparisonMetric2", "AI_ComparisonInsight2"),
+            "gap": Emu(180000),
+        },
+        {
+            "note": "AI_PartialNote_Table",
+            "align": "Table_QoQMetrics",
+            "clear": ("Table_QoQMetrics", "AI_OptimizationSummary"),
+        },
+    )
+
+    def _estimated_height(self, text, width, size_pt):
+
+        """How tall `text` will render once wrapped into `width`."""
+
+        per_line = max(
+            1, Emu(width).pt / (size_pt * self.CHAR_WIDTH_RATIO)
+        )
+
+        wrapped = max(1, math.ceil(len(str(text)) / per_line))
+
+        return Pt(wrapped * size_pt * self.LINE_HEIGHT_RATIO)
+
+    @staticmethod
+    def _bottom(shape):
+
+        """The foot of a shape's box.
+
+        Deliberately not an estimate of where its text ends. Measuring wrapped
+        text well enough to place something under it means resolving inherited
+        paragraph spacing and vertical anchoring, and an estimate that comes
+        in short puts the note through the middle of the content it was meant
+        to sit below -- a worse failure than the wasted gap.
+        """
+
+        return shape.top + shape.height
+
+    def add_partial_period_note(self, text):
+
+        """
+        Places the partial-period legend wherever the asterisk reaches the
+        reader, and only where it genuinely fits.
+
+        A note that overruns the footer band lands under the logo and off the
+        bottom of the slide, which is worse than no note -- so each placement
+        is measured first and skipped if the room isn't there. Skipping is
+        safe: the asterisk is explained on the other slides, and the AI
+        commentary on the period detail slides describes the partial period in
+        prose regardless.
+        """
+
+        donor = self.find_shape(self.PARTIAL_NOTE_DONOR)
+
+        if donor is None or not text:
+            return
+
+        # Nothing may reach into the band carrying the footer and the logo.
+        ceiling = self.prs.slide_height - FOOTER_BAND_HEIGHT
+
+        placed = []
+
+        for target in self.PARTIAL_NOTE_TARGETS:
+
+            index = self._slide_index_by_shape(target["align"])
+
+            if index is None:
+                continue
+
+            slide = self.prs.slides[index]
+
+            by_name = {shape.name: shape for shape in slide.shapes}
+
+            align = by_name.get(target["align"])
+
+            if align is None:
+                continue
+
+            width = min(
+                donor.width,
+                self.prs.slide_width - align.left - donor.left,
+            )
+
+            size = next(
+                (
+                    run.font.size.pt
+                    for paragraph in donor.text_frame.paragraphs
+                    for run in paragraph.runs
+                    if run.font.size
+                ),
+                10.0,
+            )
+
+            height = max(donor.height, int(self._estimated_height(text, width, size)))
+
+            gap = target.get("gap", Emu(45720))
+
+            top = max(
+                (
+                    self._bottom(by_name[name]) + gap
+                    for name in target["clear"] if name in by_name
+                ),
+                default=ceiling - height,
+            )
+
+            if top + height > ceiling:
+                print(
+                    f"[SKIPPED] {target['note']} "
+                    "(no room above the footer band)"
+                )
+                continue
+
+            clone = deepcopy(donor._element)
+
+            slide.shapes._spTree.append(clone)
+
+            note = slide.shapes[-1]
+
+            note.name = target["note"]
+
+            # Shape ids only have to be unique within their own slide, and the
+            # donor's may already be taken on this one.
+            self._reassign_shape_id(slide, note)
+
+            note.left, note.top = align.left, int(top)
+            note.width, note.height = width, height
+
+            note.text_frame.word_wrap = True
+
+            self.replace_text(target["note"], text)
+
+            placed.append(f"slide {index + 1}")
+
+        if placed:
+            print(f"[ADDED] partial-period legend on {', '.join(placed)}")
+
+    @staticmethod
+    def _reassign_shape_id(slide, shape):
+
+        used = set()
+
+        def walk(shapes):
+            for other in shapes:
+                if other is not shape:
+                    used.add(other.shape_id)
+                if hasattr(other, "shapes"):
+                    walk(other.shapes)
+
+        walk(slide.shapes)
+
+        shape._element._nvXxPr.cNvPr.set(
+            "id", str(max(used) + 1 if used else 2)
+        )
+
     def fit_footnote(self, object_name, reference_names, min_height, gap=45720):
 
         """
@@ -2444,6 +2631,14 @@ class PowerPointEngine:
         self._prepare_intent_companies_table()
 
         if replacements:
+
+            # Pulled out before the fill pass: this one has no shape waiting
+            # for it in the template. The note boxes are cloned onto their
+            # slides here and written directly, so leaving the key in would
+            # only make replace_objects hunt for a shape that never existed.
+            self.add_partial_period_note(
+                replacements.pop("AI_PartialPeriodNote", "")
+            )
 
             self.replace_objects(replacements)
 
