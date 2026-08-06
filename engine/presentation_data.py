@@ -606,9 +606,18 @@ class PresentationData:
             metrics = slot["metrics"]
             date_range = f"{slot['start']} - {slot['end']}"
 
-            ppt[f"TITLE_{token}Performance"] = f"{slot['label']} Performance"
+            # The divider and detail-slide title use the plain label, without
+            # the partial-period asterisk: at title size the mark reads as a
+            # typo rather than a footnote reference, and these two are the
+            # only places the label appears with nothing nearby to explain
+            # it. The asterisk stays everywhere else it's already used --
+            # the agenda, the comparison chart's legend and the metrics
+            # table's headers -- where the new legend note defines it.
+            plain = slot.get("plain_label", slot["label"])
 
-            ppt[f"SECTION_{token}"] = f"{slot['label']} Performance"
+            ppt[f"TITLE_{token}Performance"] = f"{plain} Performance"
+
+            ppt[f"SECTION_{token}"] = f"{plain} Performance"
 
             # PERIOD_Q1/PERIOD_Q2 are ambiguous names shared with slide 4
             # (already set above, occurrence 0) -- the detail-slide copy
